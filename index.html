@@ -1,0 +1,1777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Throne — Tactical Hex Duel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a0c;
+            --bg-panel: #111114;
+            --bg-hex: #16161a;
+            --bg-hex-hover: #1e1e24;
+            --border: #2a2a32;
+            --text-primary: #e8e6e3;
+            --text-muted: #6b6b76;
+            --accent-gold: #d4af37;
+            --accent-gold-dim: #a68a2a;
+            --player1: #c94c4c;
+            --player1-dim: #8a3535;
+            --player2: #4c8bc9;
+            --player2-dim: #35628a;
+            --throne: #d4af37;
+            --pin-indicator: #ff6b6b;
+            --valid-move: rgba(100, 200, 100, 0.3);
+            --damage-path: rgba(255, 100, 100, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Cormorant Garamond', serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .game-container {
+            display: grid;
+            grid-template-columns: 280px 1fr 320px;
+            min-height: 100vh;
+            gap: 0;
+        }
+
+        /* Left Panel - Game State */
+        .panel {
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel-right {
+            border-right: none;
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            max-height: 100vh;
+        }
+
+        .panel-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            text-align: center;
+            color: var(--accent-gold);
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 8px;
+        }
+
+        .turn-indicator {
+            text-align: center;
+            padding: 20px;
+            background: var(--bg-hex);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .turn-indicator .player-name {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .turn-indicator.player1 .player-name { color: var(--player1); }
+        .turn-indicator.player2 .player-name { color: var(--player2); }
+
+        .actions-remaining {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .actions-remaining span {
+            color: var(--accent-gold);
+            font-weight: 500;
+        }
+
+        .game-phase {
+            text-align: center;
+            padding: 12px;
+            background: var(--accent-gold-dim);
+            color: var(--bg-dark);
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .army-display {
+            background: var(--bg-hex);
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .army-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .army-title.player1 { color: var(--player1); }
+        .army-title.player2 { color: var(--player2); }
+
+        .army-pieces {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .army-piece {
+            width: 36px;
+            height: 36px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: 2px solid transparent;
+        }
+
+        .army-piece:hover {
+            transform: scale(1.1);
+        }
+
+        .army-piece.player1 { background: var(--player1-dim); }
+        .army-piece.player2 { background: var(--player2-dim); }
+        .army-piece.dead { opacity: 0.3; pointer-events: none; }
+        .army-piece.pinned { border-color: var(--pin-indicator); }
+
+        /* Board Area */
+        .board-area {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: 
+                radial-gradient(ellipse at center, rgba(212, 175, 55, 0.03) 0%, transparent 60%),
+                var(--bg-dark);
+            position: relative;
+        }
+
+        #game-board {
+            cursor: default;
+        }
+
+        .hex {
+            fill: var(--bg-hex);
+            stroke: var(--border);
+            stroke-width: 1;
+            transition: fill 0.15s;
+            cursor: pointer;
+        }
+
+        .hex:hover {
+            fill: var(--bg-hex-hover);
+        }
+
+        .hex.throne {
+            fill: rgba(212, 175, 55, 0.15);
+            stroke: var(--accent-gold);
+            stroke-width: 2;
+        }
+
+        .hex.valid-move {
+            fill: var(--valid-move);
+        }
+
+        .hex.damage-path {
+            fill: var(--damage-path);
+        }
+
+        .hex.selected {
+            stroke: var(--accent-gold);
+            stroke-width: 3;
+        }
+
+        .piece {
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+
+        .piece:hover {
+            transform: scale(1.1);
+        }
+
+        .piece.selected {
+            filter: drop-shadow(0 0 8px var(--accent-gold));
+        }
+
+        .piece.pinned {
+            filter: drop-shadow(0 0 6px var(--pin-indicator));
+        }
+
+        .piece-hp {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            fill: white;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+
+        .ring-highlight {
+            fill: none;
+            stroke: var(--accent-gold);
+            stroke-width: 2;
+            stroke-dasharray: 5 5;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .ring-highlight.active {
+            opacity: 0.6;
+        }
+
+        /* Controls */
+        .game-controls {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            padding: 10px 20px;
+            border: 1px solid var(--border);
+            background: var(--bg-panel);
+            color: var(--text-primary);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn:hover {
+            background: var(--bg-hex);
+            border-color: var(--accent-gold-dim);
+        }
+
+        .btn.primary {
+            background: var(--accent-gold-dim);
+            color: var(--bg-dark);
+            border-color: var(--accent-gold);
+        }
+
+        .btn.primary:hover {
+            background: var(--accent-gold);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Right Panel - Parameters */
+        .param-section {
+            background: var(--bg-hex);
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .param-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .param-row:last-child {
+            border-bottom: none;
+        }
+
+        .param-label {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .param-input {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            width: 60px;
+            padding: 6px 8px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .param-input:focus {
+            outline: none;
+            border-color: var(--accent-gold-dim);
+        }
+
+        select.param-input {
+            width: 100px;
+        }
+
+        /* Unit Editor */
+        .unit-editor {
+            background: var(--bg-hex);
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .unit-selector {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .unit-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            border: 2px solid var(--border);
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.15s;
+        }
+
+        .unit-btn:hover, .unit-btn.active {
+            border-color: var(--accent-gold);
+        }
+
+        .unit-btn.player1 { background: var(--player1-dim); }
+        .unit-btn.player2 { background: var(--player2-dim); }
+
+        .movement-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 4px;
+            margin: 12px 0;
+        }
+
+        .move-dir {
+            aspect-ratio: 1;
+            border: 1px solid var(--border);
+            background: var(--bg-dark);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+        }
+
+        .move-dir:hover {
+            border-color: var(--text-muted);
+        }
+
+        .move-dir.active {
+            background: var(--valid-move);
+            border-color: #4a4;
+        }
+
+        .move-dir.center {
+            background: var(--accent-gold-dim);
+            cursor: default;
+        }
+
+        /* Victory Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal {
+            background: var(--bg-panel);
+            border: 1px solid var(--accent-gold);
+            border-radius: 12px;
+            padding: 48px;
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .modal h2 {
+            font-size: 32px;
+            margin-bottom: 16px;
+            color: var(--accent-gold);
+        }
+
+        .modal p {
+            font-size: 18px;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+        }
+
+        /* Placement Mode */
+        .placement-palette {
+            background: var(--bg-hex);
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .placement-pieces {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .placement-piece {
+            width: 44px;
+            height: 44px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.15s;
+            position: relative;
+        }
+
+        .placement-piece:hover {
+            transform: scale(1.05);
+        }
+
+        .placement-piece.selected {
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
+        }
+
+        .placement-piece.placed {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .placement-piece .count {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            font-size: 10px;
+            background: var(--bg-dark);
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Log */
+        .game-log {
+            background: var(--bg-hex);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+        }
+
+        .log-entry {
+            padding: 4px 0;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-entry.player1 { color: var(--player1); }
+        .log-entry.player2 { color: var(--player2); }
+        .log-entry.system { color: var(--accent-gold); }
+
+        /* Rotation UI */
+        .rotation-controls {
+            position: absolute;
+            display: flex;
+            gap: 8px;
+            background: var(--bg-panel);
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--accent-gold);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        .rotation-controls button {
+            width: 36px;
+            height: 36px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: var(--bg-hex);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .rotation-controls button:hover {
+            background: var(--accent-gold-dim);
+            color: var(--bg-dark);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Left Panel -->
+        <div class="panel">
+            <div class="logo">THRONE</div>
+            
+            <div class="turn-indicator player1" id="turn-indicator">
+                <div class="player-name">Player 1</div>
+                <div class="actions-remaining">Actions: <span id="actions-count">2</span>/2</div>
+            </div>
+
+            <div class="game-phase" id="game-phase">PLACEMENT PHASE</div>
+
+            <div class="army-display">
+                <div class="army-title player1">⬢ Player 1 Army</div>
+                <div class="army-pieces" id="army-p1"></div>
+            </div>
+
+            <div class="army-display">
+                <div class="army-title player2">⬢ Player 2 Army</div>
+                <div class="army-pieces" id="army-p2"></div>
+            </div>
+
+            <div class="game-log" id="game-log">
+                <div class="log-entry system">Game initialized. Place your pieces.</div>
+            </div>
+        </div>
+
+        <!-- Board Area -->
+        <div class="board-area">
+            <svg id="game-board" width="700" height="700"></svg>
+            <div class="game-controls">
+                <button class="btn" id="btn-reset">Reset Game</button>
+                <button class="btn" id="btn-end-turn" disabled>End Turn</button>
+                <button class="btn primary" id="btn-start-game" disabled>Start Game</button>
+            </div>
+            <div class="rotation-controls" id="rotation-controls" style="display: none;">
+                <button id="rotate-ccw">↺</button>
+                <span style="display: flex; align-items: center; font-size: 12px; color: var(--text-muted);">Ring <span id="rotation-ring">1</span></span>
+                <button id="rotate-cw">↻</button>
+                <button id="rotate-cancel" style="margin-left: 8px; font-size: 12px;">✕</button>
+            </div>
+        </div>
+
+        <!-- Right Panel - Parameters -->
+        <div class="panel panel-right">
+            <div class="panel-title">Placement</div>
+            <div class="placement-palette" id="placement-p1">
+                <div class="army-title player1">Player 1 Pieces</div>
+                <div class="placement-pieces" id="placement-pieces-p1"></div>
+            </div>
+            <div class="placement-palette" id="placement-p2">
+                <div class="army-title player2">Player 2 Pieces</div>
+                <div class="placement-pieces" id="placement-pieces-p2"></div>
+            </div>
+
+            <div class="panel-title" style="margin-top: 16px;">Game Parameters</div>
+            <div class="param-section">
+                <div class="param-row">
+                    <span class="param-label">Pawn HP</span>
+                    <input type="number" class="param-input" id="param-pawn-hp" value="2" min="1" max="10">
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Special HP</span>
+                    <input type="number" class="param-input" id="param-special-hp" value="3" min="1" max="10">
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Ram Damage</span>
+                    <input type="number" class="param-input" id="param-ram-damage" value="1" min="1" max="5">
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Actions/Turn</span>
+                    <input type="number" class="param-input" id="param-actions" value="2" min="1" max="4">
+                </div>
+            </div>
+
+            <div class="panel-title" style="margin-top: 16px;">Unit Editor</div>
+            <div class="unit-editor">
+                <div class="unit-selector" id="unit-selector"></div>
+                <div id="unit-details" style="display: none;">
+                    <div class="param-row">
+                        <span class="param-label">Move Range</span>
+                        <input type="number" class="param-input" id="unit-range" value="3" min="1" max="6">
+                    </div>
+                    <div class="panel-title" style="margin-top: 12px; margin-bottom: 8px;">Movement Directions</div>
+                    <div class="movement-grid" id="movement-grid"></div>
+                    <div style="font-size: 11px; color: var(--text-muted); text-align: center;">
+                        Click to toggle directions
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-title" style="margin-top: 16px;">Instructions</div>
+            <div class="param-section" style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+                <p><strong>Placement:</strong> Select a piece from the palette, then click a hex to place it.</p>
+                <p style="margin-top: 8px;"><strong>Movement:</strong> Click a piece, then click a valid destination. Units ram through enemies.</p>
+                <p style="margin-top: 8px;"><strong>Rotation:</strong> Select your King, press R or click "Rotate" to enter rotation mode. Click a ring to rotate it.</p>
+                <p style="margin-top: 8px;"><strong>Victory:</strong> Capture the Throne, eliminate all enemy units, or pin + ram the enemy King.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Victory Modal -->
+    <div class="modal-overlay" id="victory-modal">
+        <div class="modal">
+            <h2 id="victory-title">Victory!</h2>
+            <p id="victory-message">Player 1 wins by capturing the Throne!</p>
+            <button class="btn primary" id="btn-new-game">New Game</button>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // THRONE - Tactical Hex Duel Prototype
+        // ============================================
+
+        const HEX_SIZE = 38;
+        const BOARD_RADIUS = 5;
+        const CENTER_X = 350;
+        const CENTER_Y = 350;
+
+        // Hex directions (pointy-top)
+        const HEX_DIRECTIONS = [
+            { q: 1, r: 0 },   // E
+            { q: 1, r: -1 },  // NE
+            { q: 0, r: -1 },  // NW
+            { q: -1, r: 0 },  // W
+            { q: -1, r: 1 },  // SW
+            { q: 0, r: 1 },   // SE
+        ];
+
+        const PIECE_TYPES = {
+            KING: { symbol: '♚', name: 'King', defaultHP: Infinity, isKing: true },
+            PAWN: { symbol: '♟', name: 'Pawn', defaultHP: 2, isKing: false },
+            KNIGHT: { symbol: '♞', name: 'Knight', defaultHP: 3, isKing: false },
+            ROOK: { symbol: '♜', name: 'Rook', defaultHP: 3, isKing: false },
+            BISHOP: { symbol: '♝', name: 'Bishop', defaultHP: 3, isKing: false },
+            LANCE: { symbol: '⚔', name: 'Lance', defaultHP: 3, isKing: false },
+        };
+
+        // Game state
+        let gameState = {
+            phase: 'placement', // placement, playing, ended
+            currentPlayer: 1,
+            actionsRemaining: 2,
+            actionsPerTurn: 2,
+            usedPieces: new Set(),
+            pieces: [],
+            board: new Map(), // hex key -> piece
+            selectedPiece: null,
+            selectedPlacementPiece: null,
+            placementCounts: {
+                1: { KING: 1, PAWN: 4, KNIGHT: 1, ROOK: 1, BISHOP: 1, LANCE: 1 },
+                2: { KING: 1, PAWN: 4, KNIGHT: 1, ROOK: 1, BISHOP: 1, LANCE: 1 }
+            },
+            validMoves: [],
+            rotationMode: false,
+            selectedRing: null,
+            params: {
+                pawnHP: 2,
+                specialHP: 3,
+                ramDamage: 1,
+                actionsPerTurn: 2
+            },
+            unitConfigs: {}
+        };
+
+        // Initialize unit configs with default movement patterns
+        function initUnitConfigs() {
+            // King: all directions, range 1
+            gameState.unitConfigs['KING'] = {
+                range: 1,
+                directions: [0, 1, 2, 3, 4, 5]
+            };
+            // Pawn: forward directions, range 1
+            gameState.unitConfigs['PAWN'] = {
+                range: 2,
+                directions: [0, 1, 2, 3, 4, 5]
+            };
+            // Knight: all directions, range 2
+            gameState.unitConfigs['KNIGHT'] = {
+                range: 3,
+                directions: [0, 1, 2, 3, 4, 5]
+            };
+            // Rook: straight lines
+            gameState.unitConfigs['ROOK'] = {
+                range: 5,
+                directions: [0, 3]
+            };
+            // Bishop: diagonal
+            gameState.unitConfigs['BISHOP'] = {
+                range: 5,
+                directions: [1, 2, 4, 5]
+            };
+            // Lance: forward, long range
+            gameState.unitConfigs['LANCE'] = {
+                range: 5,
+                directions: [0, 1, 5]
+            };
+        }
+
+        // ============================================
+        // HEX MATH
+        // ============================================
+
+        function hexKey(q, r) {
+            return `${q},${r}`;
+        }
+
+        function parseHexKey(key) {
+            const [q, r] = key.split(',').map(Number);
+            return { q, r };
+        }
+
+        function hexToPixel(q, r) {
+            const x = HEX_SIZE * (Math.sqrt(3) * q + Math.sqrt(3) / 2 * r) + CENTER_X;
+            const y = HEX_SIZE * (3 / 2 * r) + CENTER_Y;
+            return { x, y };
+        }
+
+        function pixelToHex(x, y) {
+            const px = x - CENTER_X;
+            const py = y - CENTER_Y;
+            const q = (Math.sqrt(3) / 3 * px - 1 / 3 * py) / HEX_SIZE;
+            const r = (2 / 3 * py) / HEX_SIZE;
+            return hexRound(q, r);
+        }
+
+        function hexRound(q, r) {
+            const s = -q - r;
+            let rq = Math.round(q);
+            let rr = Math.round(r);
+            let rs = Math.round(s);
+
+            const qDiff = Math.abs(rq - q);
+            const rDiff = Math.abs(rr - r);
+            const sDiff = Math.abs(rs - s);
+
+            if (qDiff > rDiff && qDiff > sDiff) {
+                rq = -rr - rs;
+            } else if (rDiff > sDiff) {
+                rr = -rq - rs;
+            }
+
+            return { q: rq, r: rr };
+        }
+
+        function hexDistance(q1, r1, q2, r2) {
+            return (Math.abs(q1 - q2) + Math.abs(q1 + r1 - q2 - r2) + Math.abs(r1 - r2)) / 2;
+        }
+
+        function getRing(q, r) {
+            return hexDistance(0, 0, q, r);
+        }
+
+        function isValidHex(q, r) {
+            return getRing(q, r) <= BOARD_RADIUS;
+        }
+
+        function getHexCorners(cx, cy, size) {
+            const corners = [];
+            for (let i = 0; i < 6; i++) {
+                const angle = Math.PI / 180 * (60 * i - 30);
+                corners.push({
+                    x: cx + size * Math.cos(angle),
+                    y: cy + size * Math.sin(angle)
+                });
+            }
+            return corners;
+        }
+
+        function hexNeighbor(q, r, direction) {
+            const d = HEX_DIRECTIONS[direction];
+            return { q: q + d.q, r: r + d.r };
+        }
+
+        function getHexesInRing(ring) {
+            if (ring === 0) return [{ q: 0, r: 0 }];
+            
+            const hexes = [];
+            let hex = { q: ring, r: 0 }; // Start at E
+            
+            for (let dir = 2; dir < 8; dir++) {
+                const actualDir = dir % 6;
+                for (let i = 0; i < ring; i++) {
+                    hexes.push({ ...hex });
+                    hex = hexNeighbor(hex.q, hex.r, actualDir);
+                }
+            }
+            
+            return hexes;
+        }
+
+        function rotateHexAroundCenter(q, r, steps) {
+            // Rotate a hex position around center by steps * 60 degrees
+            // Using cube coordinates for rotation
+            const s = -q - r;
+            let newQ = q, newR = r, newS = s;
+            
+            const absSteps = Math.abs(steps);
+            const direction = steps > 0 ? 1 : -1;
+            
+            for (let i = 0; i < absSteps; i++) {
+                if (direction > 0) {
+                    // Clockwise
+                    [newQ, newR, newS] = [-newR, -newS, -newQ];
+                } else {
+                    // Counter-clockwise
+                    [newQ, newR, newS] = [-newS, -newQ, -newR];
+                }
+            }
+            
+            return { q: newQ, r: newR };
+        }
+
+        // ============================================
+        // BOARD RENDERING
+        // ============================================
+
+        function createBoard() {
+            const svg = document.getElementById('game-board');
+            svg.innerHTML = '';
+
+            // Create hex group
+            const hexGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            hexGroup.id = 'hex-group';
+            svg.appendChild(hexGroup);
+
+            // Create ring highlight paths for rotation
+            for (let ring = 1; ring <= BOARD_RADIUS; ring++) {
+                const ringHexes = getHexesInRing(ring);
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.id = `ring-${ring}`;
+                path.classList.add('ring-highlight');
+                
+                // Create path around ring
+                let d = '';
+                ringHexes.forEach((hex, i) => {
+                    const { x, y } = hexToPixel(hex.q, hex.r);
+                    if (i === 0) {
+                        d += `M ${x} ${y}`;
+                    } else {
+                        d += ` L ${x} ${y}`;
+                    }
+                });
+                d += ' Z';
+                path.setAttribute('d', d);
+                svg.appendChild(path);
+            }
+
+            // Create hexes
+            for (let q = -BOARD_RADIUS; q <= BOARD_RADIUS; q++) {
+                for (let r = -BOARD_RADIUS; r <= BOARD_RADIUS; r++) {
+                    if (!isValidHex(q, r)) continue;
+
+                    const { x, y } = hexToPixel(q, r);
+                    const corners = getHexCorners(x, y, HEX_SIZE - 2);
+                    
+                    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                    polygon.setAttribute('points', corners.map(c => `${c.x},${c.y}`).join(' '));
+                    polygon.classList.add('hex');
+                    polygon.dataset.q = q;
+                    polygon.dataset.r = r;
+                    
+                    if (q === 0 && r === 0) {
+                        polygon.classList.add('throne');
+                    }
+                    
+                    polygon.addEventListener('click', (e) => onHexClick(q, r, e));
+                    hexGroup.appendChild(polygon);
+                }
+            }
+
+            // Create piece group
+            const pieceGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            pieceGroup.id = 'piece-group';
+            svg.appendChild(pieceGroup);
+        }
+
+        function renderPieces() {
+            const pieceGroup = document.getElementById('piece-group');
+            pieceGroup.innerHTML = '';
+
+            gameState.pieces.forEach((piece, index) => {
+                if (!piece.alive) return;
+
+                const { x, y } = hexToPixel(piece.q, piece.r);
+                
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.classList.add('piece');
+                g.dataset.index = index;
+                
+                if (gameState.selectedPiece === index) {
+                    g.classList.add('selected');
+                }
+                if (piece.pinned) {
+                    g.classList.add('pinned');
+                }
+
+                // Piece background
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', x);
+                circle.setAttribute('cy', y);
+                circle.setAttribute('r', HEX_SIZE * 0.6);
+                circle.setAttribute('fill', piece.player === 1 ? '#c94c4c' : '#4c8bc9');
+                circle.setAttribute('stroke', piece.player === 1 ? '#8a3535' : '#35628a');
+                circle.setAttribute('stroke-width', 2);
+                g.appendChild(circle);
+
+                // Piece symbol
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', x);
+                text.setAttribute('y', y + 6);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('font-size', '24');
+                text.setAttribute('fill', 'white');
+                text.setAttribute('pointer-events', 'none');
+                text.textContent = PIECE_TYPES[piece.type].symbol;
+                g.appendChild(text);
+
+                // HP indicator (not for King)
+                if (!PIECE_TYPES[piece.type].isKing && piece.hp < Infinity) {
+                    const hpText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    hpText.setAttribute('x', x + HEX_SIZE * 0.4);
+                    hpText.setAttribute('y', y - HEX_SIZE * 0.3);
+                    hpText.classList.add('piece-hp');
+                    hpText.textContent = piece.hp;
+                    g.appendChild(hpText);
+                }
+
+                g.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    onPieceClick(index);
+                });
+
+                pieceGroup.appendChild(g);
+            });
+        }
+
+        function highlightValidMoves(moves) {
+            // Clear previous highlights
+            document.querySelectorAll('.hex.valid-move, .hex.damage-path').forEach(el => {
+                el.classList.remove('valid-move', 'damage-path');
+            });
+
+            moves.forEach(move => {
+                const hex = document.querySelector(`.hex[data-q="${move.q}"][data-r="${move.r}"]`);
+                if (hex) {
+                    hex.classList.add(move.willKill ? 'damage-path' : 'valid-move');
+                }
+                
+                // Highlight damage path
+                if (move.damagePath) {
+                    move.damagePath.forEach(pos => {
+                        const pathHex = document.querySelector(`.hex[data-q="${pos.q}"][data-r="${pos.r}"]`);
+                        if (pathHex) pathHex.classList.add('damage-path');
+                    });
+                }
+            });
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.hex.valid-move, .hex.damage-path, .hex.selected').forEach(el => {
+                el.classList.remove('valid-move', 'damage-path', 'selected');
+            });
+        }
+
+        // ============================================
+        // GAME LOGIC
+        // ============================================
+
+        function getValidMoves(piece) {
+            if (!piece.alive || piece.pinned) return [];
+            
+            const config = gameState.unitConfigs[piece.type];
+            const moves = [];
+            
+            config.directions.forEach(dir => {
+                for (let dist = 1; dist <= config.range; dist++) {
+                    let q = piece.q;
+                    let r = piece.r;
+                    const damagePath = [];
+                    let blocked = false;
+                    
+                    for (let step = 0; step < dist; step++) {
+                        const next = hexNeighbor(q, r, dir);
+                        q = next.q;
+                        r = next.r;
+                        
+                        if (!isValidHex(q, r)) {
+                            blocked = true;
+                            break;
+                        }
+                        
+                        const occupant = getPieceAt(q, r);
+                        if (occupant) {
+                            if (occupant.player === piece.player) {
+                                // Blocked by friendly
+                                blocked = true;
+                                break;
+                            } else {
+                                // Enemy in path
+                                damagePath.push({ q, r, piece: occupant });
+                            }
+                        }
+                    }
+                    
+                    if (blocked) continue;
+                    
+                    // Check if we can end here
+                    const endOccupant = getPieceAt(q, r);
+                    if (endOccupant && endOccupant.player !== piece.player) {
+                        // Can only end on enemy if it would die
+                        const wouldKill = canKillWithRam(endOccupant, damagePath.length + 1);
+                        if (wouldKill) {
+                            moves.push({ q, r, damagePath, willKill: true });
+                        }
+                    } else if (!endOccupant) {
+                        moves.push({ q, r, damagePath, willKill: false });
+                    }
+                }
+            });
+            
+            return moves;
+        }
+
+        function canKillWithRam(piece, damageTotal) {
+            if (PIECE_TYPES[piece.type].isKing) {
+                return piece.pinned; // King can only die if pinned
+            }
+            return piece.hp <= damageTotal * gameState.params.ramDamage;
+        }
+
+        function getPieceAt(q, r) {
+            return gameState.pieces.find(p => p.alive && p.q === q && p.r === r);
+        }
+
+        function executeMove(pieceIndex, targetQ, targetR, move) {
+            const piece = gameState.pieces[pieceIndex];
+            
+            // Apply damage along path
+            if (move.damagePath) {
+                move.damagePath.forEach(pos => {
+                    const target = pos.piece || getPieceAt(pos.q, pos.r);
+                    if (target && target.player !== piece.player) {
+                        applyDamage(target, gameState.params.ramDamage);
+                    }
+                });
+            }
+            
+            // Handle enemy at destination
+            const destOccupant = getPieceAt(targetQ, targetR);
+            if (destOccupant && destOccupant.player !== piece.player) {
+                applyDamage(destOccupant, gameState.params.ramDamage);
+                if (destOccupant.alive) {
+                    // Shouldn't happen if move was valid
+                    console.error('Move validation error');
+                    return false;
+                }
+            }
+            
+            // Move piece
+            piece.q = targetQ;
+            piece.r = targetR;
+            
+            addLog(`${piece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[piece.type].name} moves to (${targetQ}, ${targetR})`, piece.player);
+            
+            // Check victory
+            if (targetQ === 0 && targetR === 0 && PIECE_TYPES[piece.type].isKing) {
+                endGame(piece.player, 'throne');
+                return true;
+            }
+            
+            // Update pins
+            updatePins();
+            
+            // Check army elimination
+            checkArmyElimination();
+            
+            return true;
+        }
+
+        function applyDamage(piece, damage) {
+            if (PIECE_TYPES[piece.type].isKing) {
+                if (piece.pinned) {
+                    piece.alive = false;
+                    addLog(`${piece.player === 1 ? 'P1' : 'P2'} King destroyed!`, 'system');
+                    endGame(piece.player === 1 ? 2 : 1, 'kingkill');
+                }
+                return;
+            }
+            
+            piece.hp -= damage;
+            if (piece.hp <= 0) {
+                piece.alive = false;
+                addLog(`${piece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[piece.type].name} destroyed`, piece.player);
+            }
+        }
+
+        function updatePins() {
+            gameState.pieces.forEach(piece => {
+                if (!piece.alive) return;
+                piece.pinned = checkIfPinned(piece);
+            });
+        }
+
+        function checkIfPinned(piece) {
+            const ring = getRing(piece.q, piece.r);
+            if (ring === 0 || ring === BOARD_RADIUS) return false;
+            
+            // Get neighbors in inner and outer rings
+            let hasInnerEnemy = false;
+            let hasOuterEnemy = false;
+            
+            for (let dir = 0; dir < 6; dir++) {
+                const neighbor = hexNeighbor(piece.q, piece.r, dir);
+                if (!isValidHex(neighbor.q, neighbor.r)) continue;
+                
+                const neighborRing = getRing(neighbor.q, neighbor.r);
+                const occupant = getPieceAt(neighbor.q, neighbor.r);
+                
+                if (occupant && occupant.player !== piece.player && occupant.alive) {
+                    if (neighborRing < ring) hasInnerEnemy = true;
+                    if (neighborRing > ring) hasOuterEnemy = true;
+                }
+            }
+            
+            return hasInnerEnemy && hasOuterEnemy;
+        }
+
+        function executeRotation(ring, clockwise) {
+            const ringHexes = getHexesInRing(ring);
+            const piecesInRing = gameState.pieces.filter(p => 
+                p.alive && getRing(p.q, p.r) === ring
+            );
+            
+            // Rotate each piece
+            piecesInRing.forEach(piece => {
+                const rotated = rotateHexAroundCenter(piece.q, piece.r, clockwise ? 1 : -1);
+                piece.q = rotated.q;
+                piece.r = rotated.r;
+            });
+            
+            addLog(`${gameState.currentPlayer === 1 ? 'P1' : 'P2'} King rotates ring ${ring} ${clockwise ? 'CW' : 'CCW'}`, gameState.currentPlayer);
+            
+            // Update pins after rotation
+            updatePins();
+            
+            // Check for pin + ram kills
+            checkPinnedKings();
+        }
+
+        function checkPinnedKings() {
+            gameState.pieces.forEach(piece => {
+                if (piece.alive && PIECE_TYPES[piece.type].isKing && piece.pinned) {
+                    // Check if any adjacent enemy can ram
+                    // This is evaluated after rotation
+                }
+            });
+        }
+
+        function checkArmyElimination() {
+            [1, 2].forEach(player => {
+                const nonKingPieces = gameState.pieces.filter(p => 
+                    p.player === player && p.alive && !PIECE_TYPES[p.type].isKing
+                );
+                if (nonKingPieces.length === 0) {
+                    endGame(player === 1 ? 2 : 1, 'elimination');
+                }
+            });
+        }
+
+        function endGame(winner, reason) {
+            gameState.phase = 'ended';
+            
+            const reasons = {
+                throne: `Player ${winner} captures the Throne!`,
+                kingkill: `Player ${winner} destroys the enemy King!`,
+                elimination: `Player ${winner} eliminates all enemy units!`
+            };
+            
+            document.getElementById('victory-title').textContent = `Player ${winner} Wins!`;
+            document.getElementById('victory-message').textContent = reasons[reason];
+            document.getElementById('victory-modal').classList.add('active');
+            
+            addLog(`VICTORY: ${reasons[reason]}`, 'system');
+        }
+
+        function useAction(pieceIndex) {
+            gameState.usedPieces.add(pieceIndex);
+            gameState.actionsRemaining--;
+            
+            document.getElementById('actions-count').textContent = gameState.actionsRemaining;
+            
+            if (gameState.actionsRemaining <= 0) {
+                endTurn();
+            }
+        }
+
+        function endTurn() {
+            gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+            gameState.actionsRemaining = gameState.params.actionsPerTurn;
+            gameState.usedPieces.clear();
+            gameState.selectedPiece = null;
+            gameState.validMoves = [];
+            
+            updateUI();
+            clearHighlights();
+            renderPieces();
+            
+            addLog(`--- Player ${gameState.currentPlayer}'s Turn ---`, 'system');
+        }
+
+        // ============================================
+        // INPUT HANDLING
+        // ============================================
+
+        function onHexClick(q, r, e) {
+            if (gameState.phase === 'placement') {
+                handlePlacement(q, r);
+                return;
+            }
+            
+            if (gameState.phase !== 'playing') return;
+            
+            if (gameState.rotationMode) {
+                handleRotationClick(q, r);
+                return;
+            }
+            
+            // Check if this is a valid move
+            const move = gameState.validMoves.find(m => m.q === q && m.r === r);
+            if (move && gameState.selectedPiece !== null) {
+                executeMove(gameState.selectedPiece, q, r, move);
+                useAction(gameState.selectedPiece);
+                gameState.selectedPiece = null;
+                gameState.validMoves = [];
+                clearHighlights();
+                renderPieces();
+                updateArmyDisplay();
+            } else {
+                // Deselect
+                gameState.selectedPiece = null;
+                gameState.validMoves = [];
+                clearHighlights();
+                renderPieces();
+            }
+        }
+
+        function onPieceClick(index) {
+            const piece = gameState.pieces[index];
+            
+            if (gameState.phase === 'placement') return;
+            if (gameState.phase !== 'playing') return;
+            
+            if (gameState.rotationMode) {
+                // Exit rotation mode
+                gameState.rotationMode = false;
+                document.getElementById('rotation-controls').style.display = 'none';
+                document.querySelectorAll('.ring-highlight').forEach(el => el.classList.remove('active'));
+            }
+            
+            // Check if clicking an enemy piece that's a valid move target
+            if (piece.player !== gameState.currentPlayer) {
+                const move = gameState.validMoves.find(m => m.q === piece.q && m.r === piece.r);
+                if (move && gameState.selectedPiece !== null) {
+                    executeMove(gameState.selectedPiece, piece.q, piece.r, move);
+                    useAction(gameState.selectedPiece);
+                    gameState.selectedPiece = null;
+                    gameState.validMoves = [];
+                    clearHighlights();
+                    renderPieces();
+                    updateArmyDisplay();
+                }
+                return;
+            }
+            
+            // Select own piece
+            if (piece.player === gameState.currentPlayer && !gameState.usedPieces.has(index)) {
+                gameState.selectedPiece = index;
+                gameState.validMoves = getValidMoves(piece);
+                clearHighlights();
+                highlightValidMoves(gameState.validMoves);
+                renderPieces();
+            }
+        }
+
+        function handlePlacement(q, r) {
+            if (!gameState.selectedPlacementPiece) return;
+            if (getPieceAt(q, r)) return;
+            
+            const { player, type } = gameState.selectedPlacementPiece;
+            
+            // Check placement counts
+            if (gameState.placementCounts[player][type] <= 0) return;
+            
+            // Get HP for this piece type
+            let hp = PIECE_TYPES[type].defaultHP;
+            if (type === 'PAWN') hp = gameState.params.pawnHP;
+            else if (!PIECE_TYPES[type].isKing) hp = gameState.params.specialHP;
+            
+            // Create piece
+            const piece = {
+                type,
+                player,
+                q, r,
+                hp,
+                maxHP: hp,
+                alive: true,
+                pinned: false
+            };
+            
+            gameState.pieces.push(piece);
+            gameState.placementCounts[player][type]--;
+            
+            addLog(`P${player} places ${PIECE_TYPES[type].name} at (${q}, ${r})`, player);
+            
+            renderPieces();
+            updatePlacementPalette();
+            updateArmyDisplay();
+            checkCanStartGame();
+        }
+
+        function handleRotationClick(q, r) {
+            const ring = getRing(q, r);
+            if (ring === 0 || ring > BOARD_RADIUS) return;
+            
+            gameState.selectedRing = ring;
+            document.getElementById('rotation-ring').textContent = ring;
+            
+            // Highlight selected ring
+            document.querySelectorAll('.ring-highlight').forEach(el => el.classList.remove('active'));
+            document.getElementById(`ring-${ring}`).classList.add('active');
+        }
+
+        function setupRotationControls() {
+            document.getElementById('rotate-cw').addEventListener('click', () => {
+                if (gameState.selectedRing) {
+                    executeRotation(gameState.selectedRing, true);
+                    exitRotationMode();
+                    useAction(gameState.selectedPiece);
+                    gameState.selectedPiece = null;
+                    renderPieces();
+                }
+            });
+            
+            document.getElementById('rotate-ccw').addEventListener('click', () => {
+                if (gameState.selectedRing) {
+                    executeRotation(gameState.selectedRing, false);
+                    exitRotationMode();
+                    useAction(gameState.selectedPiece);
+                    gameState.selectedPiece = null;
+                    renderPieces();
+                }
+            });
+            
+            document.getElementById('rotate-cancel').addEventListener('click', () => {
+                exitRotationMode();
+            });
+        }
+
+        function enterRotationMode(pieceIndex) {
+            const piece = gameState.pieces[pieceIndex];
+            if (!PIECE_TYPES[piece.type].isKing) return;
+            
+            gameState.rotationMode = true;
+            gameState.selectedRing = 1;
+            
+            const controls = document.getElementById('rotation-controls');
+            controls.style.display = 'flex';
+            controls.style.top = '80px';
+            controls.style.left = '50%';
+            controls.style.transform = 'translateX(-50%)';
+            
+            document.getElementById('rotation-ring').textContent = '1';
+            document.getElementById(`ring-1`).classList.add('active');
+        }
+
+        function exitRotationMode() {
+            gameState.rotationMode = false;
+            gameState.selectedRing = null;
+            document.getElementById('rotation-controls').style.display = 'none';
+            document.querySelectorAll('.ring-highlight').forEach(el => el.classList.remove('active'));
+        }
+
+        // ============================================
+        // UI UPDATES
+        // ============================================
+
+        function updateUI() {
+            const indicator = document.getElementById('turn-indicator');
+            indicator.className = `turn-indicator player${gameState.currentPlayer}`;
+            indicator.querySelector('.player-name').textContent = `Player ${gameState.currentPlayer}`;
+            document.getElementById('actions-count').textContent = gameState.actionsRemaining;
+            
+            document.getElementById('game-phase').textContent = 
+                gameState.phase === 'placement' ? 'PLACEMENT PHASE' :
+                gameState.phase === 'playing' ? 'BATTLE PHASE' : 'GAME OVER';
+            
+            document.getElementById('btn-end-turn').disabled = gameState.phase !== 'playing';
+        }
+
+        function updatePlacementPalette() {
+            [1, 2].forEach(player => {
+                const container = document.getElementById(`placement-pieces-p${player}`);
+                container.innerHTML = '';
+                
+                Object.entries(PIECE_TYPES).forEach(([type, info]) => {
+                    const count = gameState.placementCounts[player][type];
+                    if (count === undefined) return;
+                    
+                    const div = document.createElement('div');
+                    div.className = `placement-piece player${player}`;
+                    if (count === 0) div.classList.add('placed');
+                    if (gameState.selectedPlacementPiece?.player === player && 
+                        gameState.selectedPlacementPiece?.type === type) {
+                        div.classList.add('selected');
+                    }
+                    
+                    div.innerHTML = `${info.symbol}<span class="count">${count}</span>`;
+                    
+                    div.addEventListener('click', () => {
+                        if (count > 0) {
+                            gameState.selectedPlacementPiece = { player, type };
+                            updatePlacementPalette();
+                        }
+                    });
+                    
+                    container.appendChild(div);
+                });
+            });
+        }
+
+        function updateArmyDisplay() {
+            [1, 2].forEach(player => {
+                const container = document.getElementById(`army-p${player}`);
+                container.innerHTML = '';
+                
+                gameState.pieces.filter(p => p.player === player).forEach((piece, idx) => {
+                    const div = document.createElement('div');
+                    div.className = `army-piece player${player}`;
+                    if (!piece.alive) div.classList.add('dead');
+                    if (piece.pinned) div.classList.add('pinned');
+                    div.textContent = PIECE_TYPES[piece.type].symbol;
+                    div.title = `${PIECE_TYPES[piece.type].name} HP: ${piece.hp}`;
+                    container.appendChild(div);
+                });
+            });
+        }
+
+        function checkCanStartGame() {
+            // Check if both kings are placed
+            const p1King = gameState.pieces.find(p => p.player === 1 && p.type === 'KING');
+            const p2King = gameState.pieces.find(p => p.player === 2 && p.type === 'KING');
+            
+            document.getElementById('btn-start-game').disabled = !(p1King && p2King);
+        }
+
+        function addLog(message, type = 'system') {
+            const log = document.getElementById('game-log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type === 1 ? 'player1' : type === 2 ? 'player2' : 'system'}`;
+            entry.textContent = message;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // ============================================
+        // UNIT EDITOR
+        // ============================================
+
+        function setupUnitEditor() {
+            const selector = document.getElementById('unit-selector');
+            
+            Object.entries(PIECE_TYPES).forEach(([type, info]) => {
+                const btn = document.createElement('button');
+                btn.className = 'unit-btn';
+                btn.textContent = info.symbol;
+                btn.title = info.name;
+                btn.addEventListener('click', () => selectUnitForEdit(type));
+                selector.appendChild(btn);
+            });
+            
+            setupMovementGrid();
+        }
+
+        function selectUnitForEdit(type) {
+            document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.getElementById('unit-details').style.display = 'block';
+            
+            const config = gameState.unitConfigs[type];
+            document.getElementById('unit-range').value = config.range;
+            
+            // Update movement grid
+            document.querySelectorAll('.move-dir').forEach(d => {
+                const dir = parseInt(d.dataset.dir);
+                if (!isNaN(dir)) {
+                    d.classList.toggle('active', config.directions.includes(dir));
+                }
+            });
+            
+            // Store current editing type
+            document.getElementById('unit-details').dataset.type = type;
+        }
+
+        function setupMovementGrid() {
+            const grid = document.getElementById('movement-grid');
+            grid.innerHTML = '';
+            
+            // 5x5 grid to represent hex directions
+            // Layout approximates hex neighbors
+            const layout = [
+                [null, null, 2, 1, null],
+                [null, null, null, null, null],
+                [3, null, 'C', null, 0],
+                [null, null, null, null, null],
+                [null, 4, 5, null, null]
+            ];
+            
+            const dirLabels = ['E', 'NE', 'NW', 'W', 'SW', 'SE'];
+            
+            layout.flat().forEach((cell, i) => {
+                const div = document.createElement('div');
+                div.className = 'move-dir';
+                
+                if (cell === 'C') {
+                    div.classList.add('center');
+                    div.textContent = '●';
+                } else if (cell !== null) {
+                    div.dataset.dir = cell;
+                    div.textContent = dirLabels[cell];
+                    div.addEventListener('click', () => toggleDirection(cell));
+                }
+                
+                grid.appendChild(div);
+            });
+            
+            // Range input handler
+            document.getElementById('unit-range').addEventListener('change', (e) => {
+                const type = document.getElementById('unit-details').dataset.type;
+                if (type) {
+                    gameState.unitConfigs[type].range = parseInt(e.target.value);
+                }
+            });
+        }
+
+        function toggleDirection(dir) {
+            const type = document.getElementById('unit-details').dataset.type;
+            if (!type) return;
+            
+            const config = gameState.unitConfigs[type];
+            const idx = config.directions.indexOf(dir);
+            
+            if (idx >= 0) {
+                config.directions.splice(idx, 1);
+            } else {
+                config.directions.push(dir);
+            }
+            
+            // Update UI
+            document.querySelectorAll('.move-dir').forEach(d => {
+                const dDir = parseInt(d.dataset.dir);
+                if (!isNaN(dDir)) {
+                    d.classList.toggle('active', config.directions.includes(dDir));
+                }
+            });
+        }
+
+        // ============================================
+        // PARAMETERS
+        // ============================================
+
+        function setupParams() {
+            document.getElementById('param-pawn-hp').addEventListener('change', (e) => {
+                gameState.params.pawnHP = parseInt(e.target.value);
+            });
+            
+            document.getElementById('param-special-hp').addEventListener('change', (e) => {
+                gameState.params.specialHP = parseInt(e.target.value);
+            });
+            
+            document.getElementById('param-ram-damage').addEventListener('change', (e) => {
+                gameState.params.ramDamage = parseInt(e.target.value);
+            });
+            
+            document.getElementById('param-actions').addEventListener('change', (e) => {
+                gameState.params.actionsPerTurn = parseInt(e.target.value);
+                gameState.actionsRemaining = gameState.params.actionsPerTurn;
+                document.getElementById('actions-count').textContent = gameState.actionsRemaining;
+            });
+        }
+
+        // ============================================
+        // GAME CONTROLS
+        // ============================================
+
+        function startGame() {
+            gameState.phase = 'playing';
+            gameState.currentPlayer = 1;
+            gameState.actionsRemaining = gameState.params.actionsPerTurn;
+            
+            updatePins();
+            updateUI();
+            renderPieces();
+            
+            document.getElementById('btn-start-game').disabled = true;
+            
+            addLog('=== GAME STARTED ===', 'system');
+            addLog(`Player 1's Turn`, 'system');
+        }
+
+        function resetGame() {
+            gameState = {
+                phase: 'placement',
+                currentPlayer: 1,
+                actionsRemaining: gameState.params.actionsPerTurn,
+                actionsPerTurn: gameState.params.actionsPerTurn,
+                usedPieces: new Set(),
+                pieces: [],
+                board: new Map(),
+                selectedPiece: null,
+                selectedPlacementPiece: null,
+                placementCounts: {
+                    1: { KING: 1, PAWN: 4, KNIGHT: 1, ROOK: 1, BISHOP: 1, LANCE: 1 },
+                    2: { KING: 1, PAWN: 4, KNIGHT: 1, ROOK: 1, BISHOP: 1, LANCE: 1 }
+                },
+                validMoves: [],
+                rotationMode: false,
+                selectedRing: null,
+                params: gameState.params,
+                unitConfigs: gameState.unitConfigs
+            };
+            
+            document.getElementById('victory-modal').classList.remove('active');
+            document.getElementById('game-log').innerHTML = '<div class="log-entry system">Game reset. Place your pieces.</div>';
+            
+            exitRotationMode();
+            clearHighlights();
+            renderPieces();
+            updateUI();
+            updatePlacementPalette();
+            updateArmyDisplay();
+            checkCanStartGame();
+        }
+
+        // ============================================
+        // KEYBOARD SHORTCUTS
+        // ============================================
+
+        function setupKeyboard() {
+            document.addEventListener('keydown', (e) => {
+                if (gameState.phase !== 'playing') return;
+                
+                // R for rotation mode
+                if (e.key === 'r' || e.key === 'R') {
+                    if (gameState.selectedPiece !== null) {
+                        const piece = gameState.pieces[gameState.selectedPiece];
+                        if (PIECE_TYPES[piece.type].isKing && piece.player === gameState.currentPlayer) {
+                            enterRotationMode(gameState.selectedPiece);
+                        }
+                    }
+                }
+                
+                // Escape to cancel
+                if (e.key === 'Escape') {
+                    if (gameState.rotationMode) {
+                        exitRotationMode();
+                    } else {
+                        gameState.selectedPiece = null;
+                        gameState.validMoves = [];
+                        clearHighlights();
+                        renderPieces();
+                    }
+                }
+                
+                // Number keys for ring selection in rotation mode
+                if (gameState.rotationMode && e.key >= '1' && e.key <= '5') {
+                    const ring = parseInt(e.key);
+                    gameState.selectedRing = ring;
+                    document.getElementById('rotation-ring').textContent = ring;
+                    document.querySelectorAll('.ring-highlight').forEach(el => el.classList.remove('active'));
+                    document.getElementById(`ring-${ring}`).classList.add('active');
+                }
+            });
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+
+        function init() {
+            initUnitConfigs();
+            createBoard();
+            setupUnitEditor();
+            setupParams();
+            setupRotationControls();
+            setupKeyboard();
+            updatePlacementPalette();
+            updateArmyDisplay();
+            updateUI();
+            
+            document.getElementById('btn-reset').addEventListener('click', resetGame);
+            document.getElementById('btn-end-turn').addEventListener('click', endTurn);
+            document.getElementById('btn-start-game').addEventListener('click', startGame);
+            document.getElementById('btn-new-game').addEventListener('click', resetGame);
+        }
+
+        // Start
+        init();
+    </script>
+</body>
+</html>
+
