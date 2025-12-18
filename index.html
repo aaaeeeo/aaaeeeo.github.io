@@ -1372,9 +1372,28 @@
 
         function checkIfPinned(piece) {
             const ring = getRing(piece.q, piece.r);
-            if (ring === 0 || ring === BOARD_RADIUS) return false;
             
-            // Get neighbors in inner and outer rings
+            // Special rule for center/throne: pinned if 2 enemies in ring 1
+            if (ring === 0) {
+                let enemiesInRing1 = 0;
+                for (let dir = 0; dir < 6; dir++) {
+                    const neighbor = hexNeighbor(piece.q, piece.r, dir);
+                    if (!isValidHex(neighbor.q, neighbor.r)) continue;
+                    
+                    const neighborRing = getRing(neighbor.q, neighbor.r);
+                    const occupant = getPieceAt(neighbor.q, neighbor.r);
+                    
+                    if (neighborRing === 1 && occupant && occupant.player !== piece.player && occupant.alive) {
+                        enemiesInRing1++;
+                    }
+                }
+                return enemiesInRing1 >= 2;
+            }
+            
+            // Outer ring cannot be pinned
+            if (ring === BOARD_RADIUS) return false;
+            
+            // Standard pinning rule: need enemy in inner ring AND outer ring
             let hasInnerEnemy = false;
             let hasOuterEnemy = false;
             
