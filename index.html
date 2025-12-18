@@ -1068,14 +1068,11 @@
                         
                         const occupant = getPieceAt(q, r);
                         if (occupant) {
-                            if (occupant.player === piece.player) {
-                                // Blocked by friendly
-                                blocked = true;
-                                break;
-                            } else {
-                                // Enemy in path
+                            if (occupant.player !== piece.player) {
+                                // Enemy in path - add to damage path
                                 damagePath.push({ q, r, piece: occupant });
                             }
+                            // Friendly units: we can pass through, handled at end
                         }
                     }
                     
@@ -1083,6 +1080,12 @@
                     
                     // Check if we can end here
                     const endOccupant = getPieceAt(q, r);
+                    
+                    // Cannot land on friendly unit
+                    if (endOccupant && endOccupant.player === piece.player) {
+                        continue;
+                    }
+                    
                     if (endOccupant && endOccupant.player !== piece.player) {
                         // Can only end on enemy if it would die
                         const wouldKill = canKillWithRam(endOccupant, damagePath.length + 1);
