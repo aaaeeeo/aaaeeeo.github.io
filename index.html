@@ -293,6 +293,17 @@
             background: var(--accent-gold);
         }
 
+        .btn.rotate {
+            background: var(--accent-gold);
+            color: var(--bg-dark);
+            border-color: var(--accent-gold);
+            font-weight: 500;
+        }
+
+        .btn.rotate:hover {
+            background: #e8c34a;
+        }
+
         .btn:disabled {
             opacity: 0.4;
             cursor: not-allowed;
@@ -593,6 +604,7 @@
             <svg id="game-board" width="700" height="700"></svg>
             <div class="game-controls">
                 <button class="btn" id="btn-reset">Reset Game</button>
+                <button class="btn rotate" id="btn-rotate" style="display: none;">↻ Rotate Ring</button>
                 <button class="btn" id="btn-end-turn" disabled>End Turn</button>
                 <button class="btn primary" id="btn-start-game" disabled>Start Game</button>
             </div>
@@ -656,7 +668,7 @@
             <div class="param-section" style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
                 <p><strong>Placement:</strong> Select a piece from the palette, then click a hex to place it.</p>
                 <p style="margin-top: 8px;"><strong>Movement:</strong> Click a piece, then click a valid destination. Units ram through enemies.</p>
-                <p style="margin-top: 8px;"><strong>Rotation:</strong> Select your King, press R or click "Rotate" to enter rotation mode. Click a ring to rotate it.</p>
+                <p style="margin-top: 8px;"><strong>Rotation:</strong> Select your King, then tap "↻ Rotate Ring" button. Select a ring number, then tap ↺ or ↻ to rotate.</p>
                 <p style="margin-top: 8px;"><strong>Victory:</strong> Capture the Throne, eliminate all enemy units, or pin + ram the enemy King.</p>
             </div>
         </div>
@@ -1269,6 +1281,7 @@
             updateUI();
             clearHighlights();
             renderPieces();
+            document.getElementById('btn-rotate').style.display = 'none';
             
             addLog(`--- Player ${gameState.currentPlayer}'s Turn ---`, 'system');
         }
@@ -1300,12 +1313,14 @@
                 clearHighlights();
                 renderPieces();
                 updateArmyDisplay();
+                document.getElementById('btn-rotate').style.display = 'none';
             } else {
                 // Deselect
                 gameState.selectedPiece = null;
                 gameState.validMoves = [];
                 clearHighlights();
                 renderPieces();
+                document.getElementById('btn-rotate').style.display = 'none';
             }
         }
 
@@ -1333,6 +1348,7 @@
                     clearHighlights();
                     renderPieces();
                     updateArmyDisplay();
+                    document.getElementById('btn-rotate').style.display = 'none';
                 }
                 return;
             }
@@ -1344,6 +1360,14 @@
                 clearHighlights();
                 highlightValidMoves(gameState.validMoves);
                 renderPieces();
+                
+                // Show rotate button if King is selected
+                const rotateBtn = document.getElementById('btn-rotate');
+                if (PIECE_TYPES[piece.type].isKing) {
+                    rotateBtn.style.display = 'block';
+                } else {
+                    rotateBtn.style.display = 'none';
+                }
             }
         }
 
@@ -1767,6 +1791,15 @@
             document.getElementById('btn-end-turn').addEventListener('click', endTurn);
             document.getElementById('btn-start-game').addEventListener('click', startGame);
             document.getElementById('btn-new-game').addEventListener('click', resetGame);
+            document.getElementById('btn-rotate').addEventListener('click', () => {
+                if (gameState.selectedPiece !== null) {
+                    const piece = gameState.pieces[gameState.selectedPiece];
+                    if (PIECE_TYPES[piece.type].isKing && piece.player === gameState.currentPlayer) {
+                        enterRotationMode(gameState.selectedPiece);
+                        document.getElementById('btn-rotate').style.display = 'none';
+                    }
+                }
+            });
         }
 
         // Start
