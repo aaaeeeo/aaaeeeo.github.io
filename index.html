@@ -194,6 +194,36 @@
             cursor: pointer;
         }
 
+        /* Ring colors - distinct variations to help identify pins */
+        .hex.ring-0 {
+            fill: rgba(212, 175, 55, 0.3); /* Throne ring - gold tint */
+        }
+
+        .hex.ring-1 {
+            fill: #0a0a0e;
+            stroke: rgba(80, 20, 20, 0.7);
+        }
+
+        .hex.ring-2 {
+            fill: #0e0e14;
+            stroke: rgba(20, 80, 20, 0.7);
+        }
+
+        .hex.ring-3 {
+            fill: #121218;
+            stroke: rgba(20, 20, 80, 0.7);
+        }
+
+        .hex.ring-4 {
+            fill: #16161c;
+            stroke: rgba(80, 40, 20, 0.7);
+        }
+
+        .hex.ring-5 {
+            fill: #1a1a20;
+            stroke: rgba(40, 20, 80, 0.7);
+        }
+
         .hex:hover {
             fill: var(--bg-hex-hover);
         }
@@ -952,6 +982,10 @@
                     polygon.classList.add('hex');
                     polygon.dataset.q = q;
                     polygon.dataset.r = r;
+                    
+                    const ring = getRing(q, r);
+                    polygon.classList.add(`ring-${ring}`);
+                    polygon.dataset.ring = ring;
                     
                     if (q === 0 && r === 0) {
                         polygon.classList.add('throne');
