@@ -1239,6 +1239,9 @@
         }
 
         function getValidNextSteps(piece, currentPath) {
+            // Pinned pieces cannot move
+            if (!piece.alive || piece.pinned) return [];
+            
             // Get valid adjacent hexes for the next step in path building
             const config = gameState.unitConfigs[piece.type];
             const validDirections = config.directions;
@@ -1310,6 +1313,8 @@
                     const target = pos.piece || getPieceAt(pos.q, pos.r);
                     if (target && target.player !== piece.player) {
                         applyDamage(target, gameState.params.ramDamage);
+                        // Recalculate pins after each kill (pinned pieces might have been killed)
+                        updatePins();
                     }
                 });
             }
@@ -1318,6 +1323,8 @@
             const destOccupant = getPieceAt(targetQ, targetR);
             if (destOccupant && destOccupant.player !== piece.player) {
                 applyDamage(destOccupant, gameState.params.ramDamage);
+                // Recalculate pins after damage/kill
+                updatePins();
                 if (destOccupant.alive) {
                     // Shouldn't happen if move was valid
                     console.error('Move validation error');
@@ -1337,7 +1344,7 @@
                 return true;
             }
             
-            // Update pins
+            // Update pins after move
             updatePins();
             
             // Check army elimination
@@ -1347,12 +1354,20 @@
         }
 
         function applyDamage(piece, damage) {
-            if (PIECE_TYPES[piece.type].isKing) {
-                if (piece.pinned) {
-                    piece.alive = false;
-                    addLog(`${piece.player === 1 ? 'P1' : 'P2'} King destroyed!`, 'system');
+            // Pinned pieces die immediately when dealt any damage (including King)
+            if (piece.pinned) {
+                piece.alive = false;
+                if (PIECE_TYPES[piece.type].isKing) {
+                    addLog(`${piece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
                     endGame(piece.player === 1 ? 2 : 1, 'kingkill');
+                } else {
+                    addLog(`${piece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[piece.type].name} destroyed (pinned)`, piece.player);
                 }
+                return;
+            }
+            
+            if (PIECE_TYPES[piece.type].isKing) {
+                // King can only be damaged if pinned (already handled above)
                 return;
             }
             
@@ -1364,53 +1379,257 @@
         }
 
         function updatePins() {
+            // Reset all pin states
             gameState.pieces.forEach(piece => {
-                if (!piece.alive) return;
-                piece.pinned = checkIfPinned(piece);
+                if (piece.alive) {
+                    piece.pinned = false;
+                }
+            });
+            
+            // Group pieces by player
+            const piecesByPlayer = { 1: [], 2: [] };
+            gameState.pieces.forEach(piece => {
+                if (piece.alive) {
+                    piecesByPlayer[piece.player].push(piece);
+                }
+            });
+            
+            // Find all ally pairs and check for pinning paths
+            [1, 2].forEach(player => {
+                const allies = piecesByPlayer[player];
+                const enemies = piecesByPlayer[player === 1 ? 2 : 1];
+                
+                // Check all pairs of allies
+                for (let i = 0; i < allies.length; i++) {
+                    for (let j = i + 1; j < allies.length; j++) {
+                        const ally1 = allies[i];
+                        const ally2 = allies[j];
+                        
+                        // Find all valid paths between these allies
+                        const paths = findValidPinningPaths(ally1, ally2);
+
+                        console.log(player, i, j, paths);
+                        
+                        // For each path, check if enemies exist at every cell (excluding endpoints)
+                        paths.forEach(path => {
+                            if (isPathPinned(path, enemies)) {
+                                // Mark all enemies on this path as pinned
+                                path.forEach(step => {
+                                    if (step.q === ally1.q && step.r === ally1.r) return;
+                                    if (step.q === ally2.q && step.r === ally2.r) return;
+                                    
+                                    const enemy = getPieceAt(step.q, step.r);
+                                    if (enemy && enemy.player !== player && enemy.alive) {
+                                        enemy.pinned = true;
+                                    }
+                                });
+                            }
+                        });
+                    }
+                }
             });
         }
 
-        function checkIfPinned(piece) {
-            const ring = getRing(piece.q, piece.r);
+        function findValidPinningPaths(start, end) {
+            const paths = [];
+            const startRing = getRing(start.q, start.r);
+            const endRing = getRing(end.q, end.r);
             
-            // Special rule for center/throne: pinned if 2 enemies in ring 1
-            if (ring === 0) {
-                let enemiesInRing1 = 0;
+            // Try strictly monotonic paths (no throne)
+            if (startRing < endRing) {
+                // Strictly increasing
+                findMonotonicPath(start.q, start.r, end.q, end.r, startRing, endRing, true, []);
+            } else if (startRing > endRing) {
+                // Strictly decreasing
+                findMonotonicPath(start.q, start.r, end.q, end.r, startRing, endRing, false, []);
+            }
+            
+            // Try paths that go through throne (allows direction reversal)
+            // Determine initial direction based on start and target
+            // We can start increasing or decreasing, then reverse at throne
+            if (startRing !== endRing) {
+                // Try starting decreasing, then reverse to increasing
+                // This allows paths like: ring 1 -> throne -> ring 1 -> ring 2
+                if (endRing > startRing) {
+                    findPathThroughThrone(start.q, start.r, end.q, end.r, startRing, endRing, false, true, [], undefined);
+                }
+                // Try starting decreasing, then exit throne (for cases like ring 2 -> throne -> ring 1)
+                if (endRing < startRing) {
+                    // When going from higher ring to lower ring through throne:
+                    // Decrease to throne (2 -> 1 -> 0), exit opposite to ring 1, target at ring 1
+                    // So: beforeIncreasing=false (decreasing), afterIncreasing=true (but we exit to target ring, so it doesn't matter)
+                    findPathThroughThrone(start.q, start.r, end.q, end.r, startRing, endRing, false, true, [], undefined);
+                    // Also try the reverse: might need to go through throne differently
+                    // Actually, for endRing < startRing, we always need to decrease to throne, so only one path needed
+                }
+            } else {
+                // Same ring - must use throne to create valid path
+                // Start decreasing to throne, then reverse to increasing
+                if (startRing > 0) {
+                    findPathThroughThrone(start.q, start.r, end.q, end.r, startRing, endRing, false, true, [], undefined);
+                }
+            }
+            
+            function findMonotonicPath(q, r, targetQ, targetR, currentRing, targetRing, increasing, path) {
+                const currentPath = [...path, { q, r }];
+                
+                // Reached target
+                if (q === targetQ && r === targetR) {
+                    paths.push(currentPath);
+                    return;
+                }
+                
+                // Limit path length
+                if (currentPath.length >= 15) return;
+                
                 for (let dir = 0; dir < 6; dir++) {
-                    const neighbor = hexNeighbor(piece.q, piece.r, dir);
+                    const neighbor = hexNeighbor(q, r, dir);
                     if (!isValidHex(neighbor.q, neighbor.r)) continue;
                     
                     const neighborRing = getRing(neighbor.q, neighbor.r);
-                    const occupant = getPieceAt(neighbor.q, neighbor.r);
                     
-                    if (neighborRing === 1 && occupant && occupant.player !== piece.player && occupant.alive) {
-                        enemiesInRing1++;
+                    // Check if already in path
+                    if (currentPath.some(step => step.q === neighbor.q && step.r === neighbor.r)) continue;
+                    
+                    // Must be strictly monotonic
+                    if (increasing) {
+                        if (neighborRing <= currentRing || neighborRing > targetRing) continue;
+                    } else {
+                        if (neighborRing >= currentRing || neighborRing < targetRing) continue;
+                    }
+                    
+                    findMonotonicPath(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, increasing, currentPath);
+                }
+            }
+            
+            function findPathThroughThrone(q, r, targetQ, targetR, currentRing, targetRing, beforeIncreasing, afterIncreasing, path, throneEntryDir) {
+                const currentPath = [...path, { q, r }];
+                
+                // Reached target
+                if (q === targetQ && r === targetR && currentPath.length > 1) {
+                    paths.push(currentPath);
+                    return;
+                }
+                
+                // Limit path length
+                if (currentPath.length >= 15) return;
+                
+                const isBeforeThrone = throneEntryDir === undefined && currentRing !== 0;
+                const isAtThrone = currentRing === 0;
+                const isAfterThrone = throneEntryDir !== undefined && currentRing !== 0;
+                
+                for (let dir = 0; dir < 6; dir++) {
+                    const neighbor = hexNeighbor(q, r, dir);
+                    if (!isValidHex(neighbor.q, neighbor.r)) continue;
+                    
+                    const neighborRing = getRing(neighbor.q, neighbor.r);
+                    
+                    // Check if already in path
+                    if (currentPath.some(step => step.q === neighbor.q && step.r === neighbor.r)) continue;
+                    
+                    if (isBeforeThrone) {
+                        // Before throne - follow initial direction toward throne
+                        const increasing = beforeIncreasing;
+                        if (increasing) {
+                            if (neighborRing <= currentRing) continue; // Must increase
+                        } else {
+                            if (neighborRing >= currentRing) continue; // Must decrease
+                        }
+                        
+                        if (neighborRing === 0) {
+                            // Entering throne - remember entry direction
+                            // When we move from current cell to throne in direction 'dir',
+                            // the throne sees us entering from direction (dir + 3) % 6
+                            const entryDir = (dir + 3) % 6;
+                            findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, 0, targetRing, beforeIncreasing, afterIncreasing, currentPath, entryDir);
+                        } else {
+                            // Continue toward throne
+                            findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, beforeIncreasing, afterIncreasing, currentPath, undefined);
+                        }
+                    } else if (isAtThrone) {
+                        // At throne - must exit opposite direction
+                        if (neighborRing === 0) continue; // Can't stay at throne
+                        // Check if exit direction is opposite to entry direction
+                        // throneEntryDir is the direction FROM which we entered (from throne's perspective)
+                        // dir is the direction we're going TO exit
+                        // They should be opposite: exit should be (throneEntryDir + 3) % 6
+                        const requiredExitDir = (throneEntryDir + 3) % 6;
+                        if (dir !== requiredExitDir) continue; // Must exit opposite to entry
+                        
+                        // Check if we're exiting directly to the target
+                        // (This will also be checked at the start of the recursive call, but being explicit here)
+                        if (neighbor.q === targetQ && neighbor.r === targetR) {
+                            // Exiting directly to target - path is complete
+                            const finalPath = [...currentPath, { q: neighbor.q, r: neighbor.r }];
+                            paths.push(finalPath);
+                            continue;
+                        }
+                        
+                        // After throne, follow reversed direction
+                        findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, beforeIncreasing, afterIncreasing, currentPath, throneEntryDir);
+                    } else if (isAfterThrone) {
+                        // After throne - follow final direction toward target
+                        // Special case: if we just exited to ring 1 and target is also at ring 1,
+                        // we can only end at the exact exit cell (opposite of entry), not other ring 1 cells
+                        if (currentRing === targetRing && currentRing === 1) {
+                            // We're at ring 1 after exiting throne
+                            // First check if we're already at the target (should be caught by "Reached target" at start, but double-check)
+                            if (q === targetQ && r === targetR) {
+                                // We're at the target - path should already be added by "Reached target" check
+                                // But continue to check neighbors just in case
+                            }
+                            // Check if neighbor is the target - if so, allow it
+                            if (neighborRing === 1) {
+                                if (neighbor.q === targetQ && neighbor.r === targetR) {
+                                    // Neighbor is the target - allow reaching it
+                                    findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, beforeIncreasing, afterIncreasing, currentPath, throneEntryDir);
+                                }
+                                // Don't allow moving to other ring 1 cells
+                                continue;
+                            }
+                            // Allow continuing to other rings if needed
+                        }
+                        
+                        const increasing = afterIncreasing;
+                        if (increasing) {
+                            if (neighborRing <= currentRing) continue; // Must strictly increase
+                            if (neighborRing > targetRing) continue; // Can't exceed target
+                        } else {
+                            if (neighborRing >= currentRing) continue; // Must strictly decrease
+                            if (neighborRing < targetRing) continue; // Can't go below target
+                        }
+                        
+                        findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, beforeIncreasing, afterIncreasing, currentPath, throneEntryDir);
                     }
                 }
-                return enemiesInRing1 >= 2;
             }
             
-            // Outer ring cannot be pinned
-            if (ring === BOARD_RADIUS) return false;
-            
-            // Standard pinning rule: need enemy in inner ring AND outer ring
-            let hasInnerEnemy = false;
-            let hasOuterEnemy = false;
-            
+            return paths;
+        }
+
+        function getDirectionFrom(from, to) {
+            // Find which direction from 'from' to 'to'
             for (let dir = 0; dir < 6; dir++) {
-                const neighbor = hexNeighbor(piece.q, piece.r, dir);
-                if (!isValidHex(neighbor.q, neighbor.r)) continue;
-                
-                const neighborRing = getRing(neighbor.q, neighbor.r);
-                const occupant = getPieceAt(neighbor.q, neighbor.r);
-                
-                if (occupant && occupant.player !== piece.player && occupant.alive) {
-                    if (neighborRing < ring) hasInnerEnemy = true;
-                    if (neighborRing > ring) hasOuterEnemy = true;
+                const neighbor = hexNeighbor(from.q, from.r, dir);
+                if (neighbor.q === to.q && neighbor.r === to.r) {
+                    return dir;
                 }
             }
+            return -1;
+        }
+
+        function isPathPinned(path, enemies) {
+            // Check if every cell along the path (excluding endpoints) has an enemy
+            for (let i = 1; i < path.length - 1; i++) {
+                const step = path[i];
+                const occupant = getPieceAt(step.q, step.r);
+                
+                // Must have an enemy at this position
+                if (!occupant || !occupant.alive) return false;
+                if (!enemies.includes(occupant)) return false;
+            }
             
-            return hasInnerEnemy && hasOuterEnemy;
+            return path.length > 2; // Path must have at least 3 cells (start, middle, end)
         }
 
         function executeRotation(ring, clockwise) {
@@ -1573,20 +1792,32 @@
             
             // Select own piece - start path building
             if (piece.player === gameState.currentPlayer && !gameState.usedPieces.has(index)) {
+                // Pinned pieces cannot be selected
+                if (piece.pinned) {
+                    addLog('Pinned pieces cannot move or take actions!', 'system');
+                    return;
+                }
                 startPathBuilding(index);
             }
         }
 
         function startPathBuilding(pieceIndex) {
             const piece = gameState.pieces[pieceIndex];
+            
+            // Pinned pieces cannot take actions
+            if (piece.pinned) {
+                addLog('Pinned pieces cannot move or take actions!', 'system');
+                return;
+            }
+            
             gameState.pathBuilding = true;
             gameState.pathStartPiece = pieceIndex;
             gameState.currentPath = [];
             gameState.selectedPiece = pieceIndex;
             
-            // Show rotate button if King
+            // Show rotate button if King (and not pinned)
             const rotateBtn = document.getElementById('btn-rotate');
-            if (PIECE_TYPES[piece.type].isKing) {
+            if (PIECE_TYPES[piece.type].isKing && !piece.pinned) {
                 rotateBtn.style.display = 'block';
             } else {
                 rotateBtn.style.display = 'none';
@@ -1773,6 +2004,12 @@
         function enterRotationMode(pieceIndex) {
             const piece = gameState.pieces[pieceIndex];
             if (!PIECE_TYPES[piece.type].isKing) return;
+            
+            // Pinned pieces cannot take actions
+            if (piece.pinned) {
+                addLog('Pinned pieces cannot move or take actions!', 'system');
+                return;
+            }
             
             gameState.rotationMode = true;
             gameState.selectedRing = 1;
@@ -2127,9 +2364,11 @@
             document.getElementById('btn-rotate').addEventListener('click', () => {
                 if (gameState.selectedPiece !== null) {
                     const piece = gameState.pieces[gameState.selectedPiece];
-                    if (PIECE_TYPES[piece.type].isKing && piece.player === gameState.currentPlayer) {
+                    if (PIECE_TYPES[piece.type].isKing && piece.player === gameState.currentPlayer && !piece.pinned) {
                         enterRotationMode(gameState.selectedPiece);
                         document.getElementById('btn-rotate').style.display = 'none';
+                    } else if (piece.pinned) {
+                        addLog('Pinned pieces cannot move or take actions!', 'system');
                     }
                 }
             });
