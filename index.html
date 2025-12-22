@@ -261,11 +261,6 @@
 
         .piece {
             cursor: pointer;
-            transition: transform 0.15s;
-        }
-
-        .piece:hover {
-            transform: scale(1.1);
         }
 
         .piece.selected {
@@ -624,7 +619,7 @@
                 <div class="actions-remaining">Actions: <span id="actions-count">2</span>/2</div>
             </div>
 
-            <div class="game-phase" id="game-phase">PLACEMENT PHASE</div>
+            <div class="game-phase" id="game-phase">BATTLE PHASE</div>
 
             <div class="army-display">
                 <div class="army-title player1">⬢ Player 1 Army</div>
@@ -637,7 +632,7 @@
             </div>
 
             <div class="game-log" id="game-log">
-                <div class="log-entry system">Game initialized. Place your pieces.</div>
+                <div class="log-entry system">Game initialized.</div>
             </div>
         </div>
 
@@ -649,8 +644,7 @@
                 <button class="btn rotate" id="btn-rotate" style="display: none;">↻ Rotate Ring</button>
                 <button class="btn primary" id="btn-confirm-path" style="display: none;">Confirm Move</button>
                 <button class="btn" id="btn-cancel-path" style="display: none;">Cancel</button>
-                <button class="btn" id="btn-end-turn" disabled>End Turn</button>
-                <button class="btn primary" id="btn-start-game" disabled>Start Game</button>
+                <button class="btn" id="btn-end-turn">End Turn</button>
             </div>
             <div class="rotation-controls" id="rotation-controls" style="display: none;">
                 <button id="rotate-ccw">↺</button>
@@ -662,17 +656,7 @@
 
         <!-- Right Panel - Parameters -->
         <div class="panel panel-right">
-            <div class="panel-title">Placement</div>
-            <div class="placement-palette" id="placement-p1">
-                <div class="army-title player1">Player 1 Pieces</div>
-                <div class="placement-pieces" id="placement-pieces-p1"></div>
-            </div>
-            <div class="placement-palette" id="placement-p2">
-                <div class="army-title player2">Player 2 Pieces</div>
-                <div class="placement-pieces" id="placement-pieces-p2"></div>
-            </div>
-
-            <div class="panel-title" style="margin-top: 16px;">Game Parameters</div>
+            <div class="panel-title">Game Parameters</div>
             <div class="param-section">
                 <div class="param-row">
                     <span class="param-label">Pawn HP</span>
@@ -710,8 +694,7 @@
 
             <div class="panel-title" style="margin-top: 16px;">Instructions</div>
             <div class="param-section" style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
-                <p><strong>Placement:</strong> Select a piece from the palette, then click a hex to place it.</p>
-                <p style="margin-top: 8px;"><strong>Movement:</strong> Click a piece to start path building. Click adjacent hexes to build your path step-by-step. Click the last hex again or "Confirm Move" to execute. Press Escape or "Cancel" to abort.</p>
+                <p><strong>Movement:</strong> Click a piece to start path building. Click adjacent hexes to build your path step-by-step. Click the last hex again or "Confirm Move" to execute. Press Escape or "Cancel" to abort.</p>
                 <p style="margin-top: 8px;"><strong>Rotation:</strong> Select your King, then tap "↻ Rotate Ring" button. Select a ring number, then tap ↺ or ↻ to rotate.</p>
                 <p style="margin-top: 8px;"><strong>Victory:</strong> Capture the Throne, eliminate all enemy units, or pin + ram the enemy King.</p>
             </div>
@@ -758,7 +741,7 @@
 
         // Game state
         let gameState = {
-            phase: 'placement', // placement, playing, ended
+            phase: 'playing', // playing, ended
             currentPlayer: 1,
             actionsRemaining: 2,
             actionsPerTurn: 2,
@@ -766,11 +749,6 @@
             pieces: [],
             board: new Map(), // hex key -> piece
             selectedPiece: null,
-            selectedPlacementPiece: null,
-            placementCounts: {
-                1: { KING: 1, PAWN: 4, KNIGHT: 1, ROOK: 1, BISHOP: 1, LANCE: 1 },
-                2: { KING: 1, PAWN: 4, KNIGHT: 1, ROOK: 1, BISHOP: 1, LANCE: 1 }
-            },
             validMoves: [],
             rotationMode: false,
             selectedRing: null,
@@ -932,6 +910,272 @@
             }
             
             return { q: newQ, r: newR };
+        }
+
+        // ============================================
+        // FIXED STARTING POSITIONS
+        // ============================================
+
+        function setupFixedPositions() {
+            gameState.pieces = [];
+            
+            // Pick a random corner for player 1 (6 possible corners on ring 5)
+            const corners = [
+                { q: 5, r: 0 },   // E
+                { q: 0, r: -5 }, // NW
+                { q: -5, r: 5 }, // W
+                { q: -5, r: 0 }, // W (different)
+                { q: 0, r: 5 },  // SE
+                { q: 5, r: -5 }  // NE
+            ];
+            const p1Corner = corners[Math.floor(Math.random() * corners.length)];
+            
+            // Player 2 gets opposite corner (rotate 180 degrees)
+            const p2Corner = rotateHexAroundCenter(p1Corner.q, p1Corner.r, 3);
+            
+            // Place Player 1 pieces
+            placeArmy(1, p1Corner);
+            
+            // Place Player 2 pieces
+            placeArmy(2, p2Corner);
+            
+            // Update pins after placement
+            updatePins();
+        }
+
+        function placeArmy(player, kingCorner) {
+            // King at ring 5 corner
+            createPiece('KING', player, kingCorner.q, kingCorner.r);
+            
+            // Find direction toward center from king corner
+            // Calculate which direction points most toward (0,0)
+            let bestDir = 0;
+            let minDist = Infinity;
+            for (let dir = 0; dir < 6; dir++) {
+                const neighbor = hexNeighbor(kingCorner.q, kingCorner.r, dir);
+                const dist = hexDistance(0, 0, neighbor.q, neighbor.r);
+                if (dist < minDist) {
+                    minDist = dist;
+                    bestDir = dir;
+                }
+            }
+            
+            // Find hexes on ring 4 that are neighbors of the king
+            const ring4Candidates = [];
+            for (let dir = 0; dir < 6; dir++) {
+                const neighbor = hexNeighbor(kingCorner.q, kingCorner.r, dir);
+                if (getRing(neighbor.q, neighbor.r) === 4 && isValidHex(neighbor.q, neighbor.r)) {
+                    ring4Candidates.push({ pos: neighbor, dir: dir });
+                }
+            }
+            
+            // Sort by proximity to the "inward" direction
+            ring4Candidates.sort((a, b) => {
+                const aDist = Math.abs((a.dir - bestDir + 6) % 6);
+                const bDist = Math.abs((b.dir - bestDir + 6) % 6);
+                return aDist - bDist;
+            });
+            
+            // Take first 3 positions for Bishop, Knight, Rook
+            const ring4Positions = ring4Candidates.slice(0, 3).map(c => c.pos);
+            
+            // Ensure we have 3 positions (fallback to any ring 4 neighbors)
+            if (ring4Positions.length < 3) {
+                const allRing4 = getHexesInRing(4);
+                for (const hex of allRing4) {
+                    if (hexDistance(kingCorner.q, kingCorner.r, hex.q, hex.r) <= 2) {
+                        if (!ring4Positions.some(p => p.q === hex.q && p.r === hex.r)) {
+                            ring4Positions.push(hex);
+                            if (ring4Positions.length >= 3) break;
+                        }
+                    }
+                }
+            }
+            
+            // Place Bishop, Knight, Rook on ring 4 (guaranteed 3 positions)
+            if (ring4Positions.length >= 1) {
+                createPiece('BISHOP', player, ring4Positions[0].q, ring4Positions[0].r);
+            }
+            if (ring4Positions.length >= 2) {
+                createPiece('KNIGHT', player, ring4Positions[1].q, ring4Positions[1].r);
+            }
+            if (ring4Positions.length >= 3) {
+                createPiece('ROOK', player, ring4Positions[2].q, ring4Positions[2].r);
+            }
+            
+            // Ring 3: 3 Pawns next to the ring 4 pieces
+            const pawnPositions = [];
+            
+            // Find hexes on ring 3 that are neighbors of the ring 4 pieces
+            for (const ring4Pos of ring4Positions) {
+                for (let dir = 0; dir < 6; dir++) {
+                    const neighbor = hexNeighbor(ring4Pos.q, ring4Pos.r, dir);
+                    if (getRing(neighbor.q, neighbor.r) === 3 && 
+                        isValidHex(neighbor.q, neighbor.r) &&
+                        !pawnPositions.some(p => p.q === neighbor.q && p.r === neighbor.r)) {
+                        pawnPositions.push(neighbor);
+                    }
+                }
+            }
+            
+            // If we don't have 3 pawn positions, find more from ring 3
+            if (pawnPositions.length < 3) {
+                const allRing3 = getHexesInRing(3);
+                for (const hex of allRing3) {
+                    // Check if it's near any ring 4 piece
+                    let isNear = false;
+                    for (const ring4Pos of ring4Positions) {
+                        if (hexDistance(hex.q, hex.r, ring4Pos.q, ring4Pos.r) <= 2) {
+                            isNear = true;
+                            break;
+                        }
+                    }
+                    if (isNear && !pawnPositions.some(p => p.q === hex.q && p.r === hex.r)) {
+                        pawnPositions.push(hex);
+                        if (pawnPositions.length >= 3) break;
+                    }
+                }
+            }
+            
+            // Place 3 Pawns (guaranteed to place all 3)
+            for (let i = 0; i < 3 && i < pawnPositions.length; i++) {
+                createPiece('PAWN', player, pawnPositions[i].q, pawnPositions[i].r);
+            }
+            
+            // If we still don't have 3 pawns, place them anywhere on ring 3
+            let currentPawnCount = gameState.pieces.filter(p => p.player === player && p.type === 'PAWN').length;
+            if (currentPawnCount < 3) {
+                const allRing3 = getHexesInRing(3);
+                for (const hex of allRing3) {
+                    if (!getPieceAt(hex.q, hex.r) && currentPawnCount < 3) {
+                        createPiece('PAWN', player, hex.q, hex.r);
+                        currentPawnCount++;
+                    }
+                }
+            }
+            
+            // Get all pawn positions for lance placement check
+            const pawnPositionsList = gameState.pieces
+                .filter(p => p.player === player && p.type === 'PAWN')
+                .map(p => ({ q: p.q, r: p.r }));
+            
+            // Ring 2: Lance should be adjacent to all ally pawns (which are on ring 3)
+            const ring2Hexes = getHexesInRing(2);
+            let lancePosition = null;
+            let maxAdjacentPawns = 0;
+            
+            // Find a hex on ring 2 that is adjacent to as many pawns as possible
+            // Ideally adjacent to all 3 pawns
+            for (const hex of ring2Hexes) {
+                if (getPieceAt(hex.q, hex.r)) continue; // Skip if occupied
+                
+                // Count how many pawns this hex is adjacent to
+                let adjacentPawnCount = 0;
+                for (const pawn of pawnPositionsList) {
+                    if (hexDistance(hex.q, hex.r, pawn.q, pawn.r) === 1) {
+                        adjacentPawnCount++;
+                    }
+                }
+                
+                // Prefer positions adjacent to more pawns
+                if (adjacentPawnCount > maxAdjacentPawns) {
+                    maxAdjacentPawns = adjacentPawnCount;
+                    lancePosition = hex;
+                }
+            }
+            
+            // If we found a position adjacent to at least one pawn, use it
+            // Otherwise, find any ring 2 hex that's adjacent to at least one pawn
+            if (!lancePosition || maxAdjacentPawns === 0) {
+                for (const hex of ring2Hexes) {
+                    if (getPieceAt(hex.q, hex.r)) continue;
+                    
+                    // Check if adjacent to any pawn
+                    for (const pawn of pawnPositionsList) {
+                        if (hexDistance(hex.q, hex.r, pawn.q, pawn.r) === 1) {
+                            lancePosition = hex;
+                            break;
+                        }
+                    }
+                    if (lancePosition) break;
+                }
+            }
+            
+            // Final fallback: just pick first available ring 2 hex
+            if (!lancePosition && ring2Hexes.length > 0) {
+                for (const hex of ring2Hexes) {
+                    if (!getPieceAt(hex.q, hex.r)) {
+                        lancePosition = hex;
+                        break;
+                    }
+                }
+            }
+            
+            if (lancePosition) {
+                createPiece('LANCE', player, lancePosition.q, lancePosition.r);
+            }
+            
+            // Verify all pieces were created
+            const pieces = gameState.pieces.filter(p => p.player === player);
+            const pieceCounts = {
+                KING: pieces.filter(p => p.type === 'KING').length,
+                PAWN: pieces.filter(p => p.type === 'PAWN').length,
+                KNIGHT: pieces.filter(p => p.type === 'KNIGHT').length,
+                ROOK: pieces.filter(p => p.type === 'ROOK').length,
+                BISHOP: pieces.filter(p => p.type === 'BISHOP').length,
+                LANCE: pieces.filter(p => p.type === 'LANCE').length
+            };
+            
+            // Ensure we have all required pieces, create missing ones if needed
+            if (pieceCounts.KING === 0) {
+                createPiece('KING', player, kingCorner.q, kingCorner.r);
+            }
+            if (pieceCounts.BISHOP === 0 && ring4Positions.length > 0) {
+                createPiece('BISHOP', player, ring4Positions[0].q, ring4Positions[0].r);
+            }
+            if (pieceCounts.KNIGHT === 0 && ring4Positions.length > 1) {
+                createPiece('KNIGHT', player, ring4Positions[1].q, ring4Positions[1].r);
+            }
+            if (pieceCounts.ROOK === 0 && ring4Positions.length > 2) {
+                createPiece('ROOK', player, ring4Positions[2].q, ring4Positions[2].r);
+            }
+            if (pieceCounts.PAWN < 3) {
+                const allRing3 = getHexesInRing(3);
+                for (const hex of allRing3) {
+                    if (!getPieceAt(hex.q, hex.r) && pieceCounts.PAWN < 3) {
+                        createPiece('PAWN', player, hex.q, hex.r);
+                        pieceCounts.PAWN++;
+                    }
+                }
+            }
+            if (pieceCounts.LANCE === 0) {
+                const allRing2 = getHexesInRing(2);
+                for (const hex of allRing2) {
+                    if (!getPieceAt(hex.q, hex.r)) {
+                        createPiece('LANCE', player, hex.q, hex.r);
+                        break;
+                    }
+                }
+            }
+        }
+
+
+        function createPiece(type, player, q, r) {
+            let hp = PIECE_TYPES[type].defaultHP;
+            if (type === 'PAWN') hp = gameState.params.pawnHP;
+            else if (!PIECE_TYPES[type].isKing) hp = gameState.params.specialHP;
+            
+            const piece = {
+                type,
+                player,
+                q, r,
+                hp,
+                maxHP: hp,
+                alive: true,
+                pinned: false
+            };
+            
+            gameState.pieces.push(piece);
         }
 
         // ============================================
@@ -1725,11 +1969,6 @@
         // ============================================
 
         function onHexClick(q, r, e) {
-            if (gameState.phase === 'placement') {
-                handlePlacement(q, r);
-                return;
-            }
-            
             if (gameState.phase !== 'playing') return;
             
             if (gameState.rotationMode) {
@@ -1775,7 +2014,6 @@
         function onPieceClick(index) {
             const piece = gameState.pieces[index];
             
-            if (gameState.phase === 'placement') return;
             if (gameState.phase !== 'playing') return;
             
             if (gameState.rotationMode) {
@@ -1927,41 +2165,6 @@
             updateArmyDisplay();
         }
 
-        function handlePlacement(q, r) {
-            if (!gameState.selectedPlacementPiece) return;
-            if (getPieceAt(q, r)) return;
-            
-            const { player, type } = gameState.selectedPlacementPiece;
-            
-            // Check placement counts
-            if (gameState.placementCounts[player][type] <= 0) return;
-            
-            // Get HP for this piece type
-            let hp = PIECE_TYPES[type].defaultHP;
-            if (type === 'PAWN') hp = gameState.params.pawnHP;
-            else if (!PIECE_TYPES[type].isKing) hp = gameState.params.specialHP;
-            
-            // Create piece
-            const piece = {
-                type,
-                player,
-                q, r,
-                hp,
-                maxHP: hp,
-                alive: true,
-                pinned: false
-            };
-            
-            gameState.pieces.push(piece);
-            gameState.placementCounts[player][type]--;
-            
-            addLog(`P${player} places ${PIECE_TYPES[type].name} at (${q}, ${r})`, player);
-            
-            renderPieces();
-            updatePlacementPalette();
-            updateArmyDisplay();
-            checkCanStartGame();
-        }
 
         function handleRotationClick(q, r) {
             const ring = getRing(q, r);
@@ -2042,42 +2245,11 @@
             document.getElementById('actions-count').textContent = gameState.actionsRemaining;
             
             document.getElementById('game-phase').textContent = 
-                gameState.phase === 'placement' ? 'PLACEMENT PHASE' :
                 gameState.phase === 'playing' ? 'BATTLE PHASE' : 'GAME OVER';
             
             document.getElementById('btn-end-turn').disabled = gameState.phase !== 'playing';
         }
 
-        function updatePlacementPalette() {
-            [1, 2].forEach(player => {
-                const container = document.getElementById(`placement-pieces-p${player}`);
-                container.innerHTML = '';
-                
-                Object.entries(PIECE_TYPES).forEach(([type, info]) => {
-                    const count = gameState.placementCounts[player][type];
-                    if (count === undefined) return;
-                    
-                    const div = document.createElement('div');
-                    div.className = `placement-piece player${player}`;
-                    if (count === 0) div.classList.add('placed');
-                    if (gameState.selectedPlacementPiece?.player === player && 
-                        gameState.selectedPlacementPiece?.type === type) {
-                        div.classList.add('selected');
-                    }
-                    
-                    div.innerHTML = `${info.symbol}<span class="count">${count}</span>`;
-                    
-                    div.addEventListener('click', () => {
-                        if (count > 0) {
-                            gameState.selectedPlacementPiece = { player, type };
-                            updatePlacementPalette();
-                        }
-                    });
-                    
-                    container.appendChild(div);
-                });
-            });
-        }
 
         function updateArmyDisplay() {
             [1, 2].forEach(player => {
@@ -2096,13 +2268,6 @@
             });
         }
 
-        function checkCanStartGame() {
-            // Check if both kings are placed
-            const p1King = gameState.pieces.find(p => p.player === 1 && p.type === 'KING');
-            const p2King = gameState.pieces.find(p => p.player === 2 && p.type === 'KING');
-            
-            document.getElementById('btn-start-game').disabled = !(p1King && p2King);
-        }
 
         function addLog(message, type = 'system') {
             const log = document.getElementById('game-log');
@@ -2253,48 +2418,38 @@
             updateUI();
             renderPieces();
             
-            document.getElementById('btn-start-game').disabled = true;
-            
             addLog('=== GAME STARTED ===', 'system');
             addLog(`Player 1's Turn`, 'system');
         }
 
         function resetGame() {
-            gameState = {
-                phase: 'placement',
-                currentPlayer: 1,
-                actionsRemaining: gameState.params.actionsPerTurn,
-                actionsPerTurn: gameState.params.actionsPerTurn,
-                usedPieces: new Set(),
-                pieces: [],
-                board: new Map(),
-                selectedPiece: null,
-                selectedPlacementPiece: null,
-                placementCounts: {
-                    1: { KING: 1, PAWN: 4, KNIGHT: 1, ROOK: 1, BISHOP: 1, LANCE: 1 },
-                    2: { KING: 1, PAWN: 4, KNIGHT: 1, ROOK: 1, BISHOP: 1, LANCE: 1 }
-                },
-                validMoves: [],
-                rotationMode: false,
-                selectedRing: null,
-                pathBuilding: false,
-                currentPath: [],
-                pathStartPiece: null,
-                params: gameState.params,
-                unitConfigs: gameState.unitConfigs
-            };
+            gameState.phase = 'playing';
+            gameState.currentPlayer = 1;
+            gameState.actionsRemaining = gameState.params.actionsPerTurn;
+            gameState.actionsPerTurn = gameState.params.actionsPerTurn;
+            gameState.usedPieces = new Set();
+            gameState.pieces = [];
+            gameState.board = new Map();
+            gameState.selectedPiece = null;
+            gameState.validMoves = [];
+            gameState.rotationMode = false;
+            gameState.selectedRing = null;
+            gameState.pathBuilding = false;
+            gameState.currentPath = [];
+            gameState.pathStartPiece = null;
             
             document.getElementById('victory-modal').classList.remove('active');
-            document.getElementById('game-log').innerHTML = '<div class="log-entry system">Game reset. Place your pieces.</div>';
+            document.getElementById('game-log').innerHTML = '<div class="log-entry system">Game reset.</div>';
             
+            setupFixedPositions();
             exitRotationMode();
             cancelPathBuilding();
             clearHighlights();
             renderPieces();
             updateUI();
-            updatePlacementPalette();
             updateArmyDisplay();
-            checkCanStartGame();
+            addLog('=== GAME STARTED ===', 'system');
+            addLog(`Player 1's Turn`, 'system');
         }
 
         // ============================================
@@ -2351,13 +2506,13 @@
             setupParams();
             setupRotationControls();
             setupKeyboard();
-            updatePlacementPalette();
+            setupFixedPositions();
             updateArmyDisplay();
             updateUI();
+            startGame();
             
             document.getElementById('btn-reset').addEventListener('click', resetGame);
             document.getElementById('btn-end-turn').addEventListener('click', endTurn);
-            document.getElementById('btn-start-game').addEventListener('click', startGame);
             document.getElementById('btn-new-game').addEventListener('click', resetGame);
             document.getElementById('btn-confirm-path').addEventListener('click', confirmPathMove);
             document.getElementById('btn-cancel-path').addEventListener('click', cancelPathBuilding);
