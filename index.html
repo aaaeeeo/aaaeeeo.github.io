@@ -1691,11 +1691,14 @@
                 const allies = piecesByPlayer[player];
                 const enemies = piecesByPlayer[player === 1 ? 2 : 1];
                 
-                // Check all pairs of allies
+                // Check all pairs of allies (excluding pinned pieces - they can't create pins)
                 for (let i = 0; i < allies.length; i++) {
                     for (let j = i + 1; j < allies.length; j++) {
                         const ally1 = allies[i];
                         const ally2 = allies[j];
+                        
+                        // Skip if either ally is pinned (pinned pieces cannot create pins)
+                        if (ally1.pinned || ally2.pinned) continue;
                         
                         // Find all valid paths between these allies
                         const paths = findValidPinningPaths(ally1, ally2);
@@ -1705,8 +1708,8 @@
                         // For each path, check if enemies exist at every cell (excluding endpoints)
                         paths.forEach(path => {
                             if (isPathPinned(path, enemies)) {
-                                // Store this pinning path for visualization
-                                gameState.pinningPaths.push(path);
+                                // Store this pinning path for visualization (with player info)
+                                gameState.pinningPaths.push({ path: path, player: player });
                                 
                                 // Mark all enemies on this path as pinned
                                 path.forEach(step => {
@@ -1736,7 +1739,10 @@
             pinningGroup.innerHTML = '';
             
             // Render each pinning path
-            gameState.pinningPaths.forEach(path => {
+            gameState.pinningPaths.forEach(pinningData => {
+                const path = pinningData.path;
+                const player = pinningData.player;
+                
                 if (path.length < 2) return;
                 
                 // Create a path element
@@ -1753,11 +1759,17 @@
                     }
                 });
                 
+                // Use team color for the pin line
+                const teamColor = player === 1 ? 'var(--player1)' : 'var(--player2)';
+                // Make blue (player 2) pins more visible
+                const opacity = player === 2 ? '0.6' : '0.4';
+                const strokeWidth = player === 2 ? '3' : '2';
+                
                 pathElement.setAttribute('d', pathData);
-                pathElement.setAttribute('stroke', 'var(--pin-indicator)');
-                pathElement.setAttribute('stroke-width', '2');
+                pathElement.setAttribute('stroke', teamColor);
+                pathElement.setAttribute('stroke-width', strokeWidth);
                 pathElement.setAttribute('fill', 'none');
-                pathElement.setAttribute('opacity', '0.4');
+                pathElement.setAttribute('opacity', opacity);
                 pathElement.setAttribute('stroke-dasharray', '4 4');
                 pathElement.style.pointerEvents = 'none';
                 
