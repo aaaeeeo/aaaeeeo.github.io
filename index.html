@@ -25,7 +25,9 @@
             --throne: #d4af37;
             --pin-indicator: #ff6b6b;
             --valid-move: rgba(100, 200, 100, 0.3);
-            --damage-path: rgba(255, 100, 100, 0.4);
+            --damage-path: rgba(255, 165, 0, 0.5);
+            --path-highlight: rgba(100, 150, 255, 0.4);
+            --path-end-highlight: rgba(100, 150, 255, 0.6);
         }
 
         * {
@@ -248,13 +250,20 @@
         }
 
         .hex.path-step {
-            fill: rgba(212, 175, 55, 0.2);
-            stroke: var(--accent-gold);
+            fill: var(--path-highlight);
+            stroke: var(--path-highlight);
             stroke-width: 2;
         }
 
         .hex.path-end {
-            fill: rgba(212, 175, 55, 0.4);
+            fill: var(--path-end-highlight);
+            stroke: var(--path-end-highlight);
+            stroke-width: 3;
+        }
+
+        /* Keep throne's yellow outline visible even when part of a path */
+        .hex.throne.path-step,
+        .hex.throne.path-end {
             stroke: var(--accent-gold);
             stroke-width: 3;
         }
@@ -269,6 +278,16 @@
 
         .piece.pinned {
             filter: drop-shadow(0 0 6px var(--pin-indicator));
+        }
+
+        .piece.used {
+            opacity: 0.5;
+            filter: grayscale(0.7);
+        }
+
+        .piece.used.pinned {
+            opacity: 0.5;
+            filter: grayscale(0.7) drop-shadow(0 0 6px var(--pin-indicator));
         }
 
         .piece-hp {
@@ -386,6 +405,13 @@
         .param-input:focus {
             outline: none;
             border-color: var(--accent-gold-dim);
+        }
+
+        .param-input:disabled {
+            background: var(--bg-hex);
+            color: var(--text-muted);
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         select.param-input {
@@ -659,18 +685,6 @@
             <div class="panel-title">Game Parameters</div>
             <div class="param-section">
                 <div class="param-row">
-                    <span class="param-label">Pawn HP</span>
-                    <input type="number" class="param-input" id="param-pawn-hp" value="2" min="1" max="10">
-                </div>
-                <div class="param-row">
-                    <span class="param-label">Special HP</span>
-                    <input type="number" class="param-input" id="param-special-hp" value="3" min="1" max="10">
-                </div>
-                <div class="param-row">
-                    <span class="param-label">Ram Damage</span>
-                    <input type="number" class="param-input" id="param-ram-damage" value="1" min="1" max="5">
-                </div>
-                <div class="param-row">
                     <span class="param-label">Actions/Turn</span>
                     <input type="number" class="param-input" id="param-actions" value="2" min="1" max="4">
                 </div>
@@ -680,6 +694,14 @@
             <div class="unit-editor">
                 <div class="unit-selector" id="unit-selector"></div>
                 <div id="unit-details" style="display: none;">
+                    <div class="param-row">
+                        <span class="param-label">Max HP</span>
+                        <input type="number" class="param-input" id="unit-hp" value="3" min="1" max="10">
+                    </div>
+                    <div class="param-row">
+                        <span class="param-label">Ram Damage</span>
+                        <input type="number" class="param-input" id="unit-ram-damage" value="1" min="1" max="5">
+                    </div>
                     <div class="param-row">
                         <span class="param-label">Move Range</span>
                         <input type="number" class="param-input" id="unit-range" value="3" min="1" max="6">
@@ -746,8 +768,10 @@
             actionsRemaining: 2,
             actionsPerTurn: 2,
             usedPieces: new Set(),
+            hasAnyPieceMoved: false,
             pieces: [],
             board: new Map(), // hex key -> piece
+            pinningPaths: [], // Store paths that create pins for visualization
             selectedPiece: null,
             validMoves: [],
             rotationMode: false,
@@ -756,9 +780,6 @@
             currentPath: [],
             pathStartPiece: null,
             params: {
-                pawnHP: 2,
-                specialHP: 3,
-                ramDamage: 1,
                 actionsPerTurn: 2
             },
             unitConfigs: {}
@@ -769,32 +790,44 @@
             // King: all directions, range 1
             gameState.unitConfigs['KING'] = {
                 range: 1,
-                directions: [0, 1, 2, 3, 4, 5]
+                directions: [0, 1, 2, 3, 4, 5],
+                hp: Infinity,
+                ramDamage: 1
             };
             // Pawn: forward directions, range 1
             gameState.unitConfigs['PAWN'] = {
                 range: 2,
-                directions: [0, 1, 2, 3, 4, 5]
+                directions: [0, 1, 2, 3, 4, 5],
+                hp: 2,
+                ramDamage: 1
             };
             // Knight: all directions, range 2
             gameState.unitConfigs['KNIGHT'] = {
                 range: 3,
-                directions: [0, 1, 2, 3, 4, 5]
+                directions: [0, 1, 2, 3, 4, 5],
+                hp: 3,
+                ramDamage: 1
             };
-            // Rook: straight lines
+            // Rook: all directions
             gameState.unitConfigs['ROOK'] = {
                 range: 5,
-                directions: [0, 3]
+                directions: [0, 1, 2, 3, 4, 5],
+                hp: 3,
+                ramDamage: 1
             };
-            // Bishop: diagonal
+            // Bishop: all directions
             gameState.unitConfigs['BISHOP'] = {
                 range: 5,
-                directions: [1, 2, 4, 5]
+                directions: [0, 1, 2, 3, 4, 5],
+                hp: 3,
+                ramDamage: 1
             };
-            // Lance: forward, long range
+            // Lance: all directions
             gameState.unitConfigs['LANCE'] = {
-                range: 5,
-                directions: [0, 1, 5]
+                range: 1,
+                directions: [0, 1, 2, 3, 4, 5],
+                hp: 3,
+                ramDamage: 1
             };
         }
 
@@ -1161,9 +1194,8 @@
 
 
         function createPiece(type, player, q, r) {
-            let hp = PIECE_TYPES[type].defaultHP;
-            if (type === 'PAWN') hp = gameState.params.pawnHP;
-            else if (!PIECE_TYPES[type].isKing) hp = gameState.params.specialHP;
+            const config = gameState.unitConfigs[type];
+            const hp = config.hp === Infinity ? Infinity : config.hp;
             
             const piece = {
                 type,
@@ -1240,6 +1272,11 @@
                 }
             }
 
+            // Create pinning paths group (rendered behind pieces)
+            const pinningGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            pinningGroup.id = 'pinning-paths-group';
+            svg.appendChild(pinningGroup);
+
             // Create piece group
             const pieceGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             pieceGroup.id = 'piece-group';
@@ -1264,6 +1301,9 @@
                 }
                 if (piece.pinned) {
                     g.classList.add('pinned');
+                }
+                if (gameState.usedPieces.has(index)) {
+                    g.classList.add('used');
                 }
 
                 // Piece background
@@ -1444,8 +1484,8 @@
                     let wouldKill = false;
                     
                     if (occupant && occupant.player !== piece.player) {
-                        // Can only end on enemy if it would die
-                        wouldKill = canKillWithRam(occupant, newDamageCount + 1);
+                        // Can only end on enemy if it would die (pinned or enough damage)
+                        wouldKill = occupant.pinned || canKillWithRam(piece, occupant, newDamageCount + 1);
                         isValidDestination = wouldKill;
                     } else {
                         // Empty hex - valid destination
@@ -1537,11 +1577,12 @@
             return damagePath;
         }
 
-        function canKillWithRam(piece, damageTotal) {
-            if (PIECE_TYPES[piece.type].isKing) {
-                return piece.pinned; // King can only die if pinned
+        function canKillWithRam(attackingPiece, targetPiece, damageTotal) {
+            if (PIECE_TYPES[targetPiece.type].isKing) {
+                return targetPiece.pinned; // King can only die if pinned
             }
-            return piece.hp <= damageTotal * gameState.params.ramDamage;
+            const ramDamage = gameState.unitConfigs[attackingPiece.type].ramDamage;
+            return targetPiece.hp <= damageTotal * ramDamage;
         }
 
         function getPieceAt(q, r) {
@@ -1551,12 +1592,17 @@
         function executeMove(pieceIndex, targetQ, targetR, move) {
             const piece = gameState.pieces[pieceIndex];
             
-            // Apply damage along path
+            // Apply damage along path (excluding destination, which is handled separately)
+            const destOccupant = getPieceAt(targetQ, targetR);
+            const ramDamage = gameState.unitConfigs[piece.type].ramDamage;
             if (move.damagePath) {
                 move.damagePath.forEach(pos => {
+                    // Skip destination - it will be handled separately
+                    if (pos.q === targetQ && pos.r === targetR) return;
+                    
                     const target = pos.piece || getPieceAt(pos.q, pos.r);
                     if (target && target.player !== piece.player) {
-                        applyDamage(target, gameState.params.ramDamage);
+                        applyDamage(target, ramDamage);
                         // Recalculate pins after each kill (pinned pieces might have been killed)
                         updatePins();
                     }
@@ -1564,9 +1610,8 @@
             }
             
             // Handle enemy at destination
-            const destOccupant = getPieceAt(targetQ, targetR);
             if (destOccupant && destOccupant.player !== piece.player) {
-                applyDamage(destOccupant, gameState.params.ramDamage);
+                applyDamage(destOccupant, ramDamage);
                 // Recalculate pins after damage/kill
                 updatePins();
                 if (destOccupant.alive) {
@@ -1630,6 +1675,9 @@
                 }
             });
             
+            // Clear pinning paths
+            gameState.pinningPaths = [];
+            
             // Group pieces by player
             const piecesByPlayer = { 1: [], 2: [] };
             gameState.pieces.forEach(piece => {
@@ -1657,6 +1705,9 @@
                         // For each path, check if enemies exist at every cell (excluding endpoints)
                         paths.forEach(path => {
                             if (isPathPinned(path, enemies)) {
+                                // Store this pinning path for visualization
+                                gameState.pinningPaths.push(path);
+                                
                                 // Mark all enemies on this path as pinned
                                 path.forEach(step => {
                                     if (step.q === ally1.q && step.r === ally1.r) return;
@@ -1671,6 +1722,46 @@
                         });
                     }
                 }
+            });
+            
+            // Render pinning paths
+            renderPinningPaths();
+        }
+
+        function renderPinningPaths() {
+            const pinningGroup = document.getElementById('pinning-paths-group');
+            if (!pinningGroup) return;
+            
+            // Clear existing paths
+            pinningGroup.innerHTML = '';
+            
+            // Render each pinning path
+            gameState.pinningPaths.forEach(path => {
+                if (path.length < 2) return;
+                
+                // Create a path element
+                const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                
+                // Build path data
+                let pathData = '';
+                path.forEach((step, index) => {
+                    const { x, y } = hexToPixel(step.q, step.r);
+                    if (index === 0) {
+                        pathData += `M ${x} ${y}`;
+                    } else {
+                        pathData += ` L ${x} ${y}`;
+                    }
+                });
+                
+                pathElement.setAttribute('d', pathData);
+                pathElement.setAttribute('stroke', 'var(--pin-indicator)');
+                pathElement.setAttribute('stroke-width', '2');
+                pathElement.setAttribute('fill', 'none');
+                pathElement.setAttribute('opacity', '0.4');
+                pathElement.setAttribute('stroke-dasharray', '4 4');
+                pathElement.style.pointerEvents = 'none';
+                
+                pinningGroup.appendChild(pathElement);
             });
         }
 
@@ -1936,6 +2027,7 @@
 
         function useAction(pieceIndex) {
             gameState.usedPieces.add(pieceIndex);
+            gameState.hasAnyPieceMoved = true;
             gameState.actionsRemaining--;
             
             document.getElementById('actions-count').textContent = gameState.actionsRemaining;
@@ -2016,16 +2108,27 @@
             
             if (gameState.phase !== 'playing') return;
             
+            // In rotation mode, treat piece clicks same as hex clicks - select the ring
             if (gameState.rotationMode) {
-                // Exit rotation mode
-                gameState.rotationMode = false;
-                document.getElementById('rotation-controls').style.display = 'none';
-                document.querySelectorAll('.ring-highlight').forEach(el => el.classList.remove('active'));
+                handleRotationClick(piece.q, piece.r);
+                return;
             }
             
-            // Cancel path building if clicking a different piece
-            if (gameState.pathBuilding && gameState.pathStartPiece !== index) {
-                cancelPathBuilding();
+            // If we're in path building mode, check if this piece is on a valid next step
+            if (gameState.pathBuilding && gameState.pathStartPiece !== null) {
+                const pathPiece = gameState.pieces[gameState.pathStartPiece];
+                const validNext = getValidNextSteps(pathPiece, gameState.currentPath);
+                const clickedStep = validNext.find(step => step.q === piece.q && step.r === piece.r);
+                
+                if (clickedStep) {
+                    // This piece is on a valid move tile - continue the path
+                    gameState.currentPath.push({ q: piece.q, r: piece.r });
+                    updatePathVisualization();
+                    return;
+                } else {
+                    // This piece is not on a valid move tile - cancel path building
+                    cancelPathBuilding();
+                }
             }
             
             // Select own piece - start path building
@@ -2141,7 +2244,11 @@
             
             // If landing on enemy, must kill it
             if (occupant && occupant.player !== piece.player) {
-                const wouldKill = canKillWithRam(occupant, damagePath.length + 1);
+                // Check if destination is already in damagePath (would only take 1 instance of damage)
+                const destInPath = damagePath.some(pos => pos.q === destination.q && pos.r === destination.r);
+                const totalDamageInstances = destInPath ? damagePath.length : damagePath.length + 1;
+                // Check if pinned (dies from any damage) or if damage would kill
+                const wouldKill = occupant.pinned || canKillWithRam(piece, occupant, totalDamageInstances);
                 if (!wouldKill) {
                     addLog('Cannot land on enemy that would survive!', 'system');
                     return;
@@ -2305,6 +2412,18 @@
             
             const config = gameState.unitConfigs[type];
             document.getElementById('unit-range').value = config.range;
+            document.getElementById('unit-hp').value = config.hp === Infinity ? 999 : config.hp;
+            
+            // Disable Max HP if it's Infinity (King) or if any piece has ever moved
+            const hpInput = document.getElementById('unit-hp');
+            hpInput.disabled = config.hp === Infinity || gameState.hasAnyPieceMoved;
+            if (gameState.hasAnyPieceMoved) {
+                hpInput.title = 'Cannot change Max HP: pieces have already moved';
+            } else {
+                hpInput.title = '';
+            }
+            
+            document.getElementById('unit-ram-damage').value = config.ramDamage;
             
             // Update movement grid
             document.querySelectorAll('.move-dir').forEach(d => {
@@ -2357,6 +2476,45 @@
                     gameState.unitConfigs[type].range = parseInt(e.target.value);
                 }
             });
+            
+            // HP input handler
+            document.getElementById('unit-hp').addEventListener('change', (e) => {
+                const type = document.getElementById('unit-details').dataset.type;
+                if (type) {
+                    // Check if any piece has ever moved
+                    if (gameState.hasAnyPieceMoved) {
+                        // Revert the value - can't change if pieces have moved
+                        const config = gameState.unitConfigs[type];
+                        e.target.value = config.hp === Infinity ? 999 : config.hp;
+                        return;
+                    }
+                    
+                    const value = parseInt(e.target.value);
+                    const newHP = value === 999 ? Infinity : value;
+                    gameState.unitConfigs[type].hp = newHP;
+                    
+                    // Update all existing pieces of this type
+                    gameState.pieces.forEach(piece => {
+                        if (piece.type === type && piece.alive) {
+                            piece.maxHP = newHP;
+                            // Set current HP to new max HP (heal to full)
+                            piece.hp = newHP;
+                        }
+                    });
+                    
+                    // Update the display
+                    renderPieces();
+                    updateArmyDisplay();
+                }
+            });
+            
+            // Ram damage input handler
+            document.getElementById('unit-ram-damage').addEventListener('change', (e) => {
+                const type = document.getElementById('unit-details').dataset.type;
+                if (type) {
+                    gameState.unitConfigs[type].ramDamage = parseInt(e.target.value);
+                }
+            });
         }
 
         function toggleDirection(dir) {
@@ -2386,18 +2544,6 @@
         // ============================================
 
         function setupParams() {
-            document.getElementById('param-pawn-hp').addEventListener('change', (e) => {
-                gameState.params.pawnHP = parseInt(e.target.value);
-            });
-            
-            document.getElementById('param-special-hp').addEventListener('change', (e) => {
-                gameState.params.specialHP = parseInt(e.target.value);
-            });
-            
-            document.getElementById('param-ram-damage').addEventListener('change', (e) => {
-                gameState.params.ramDamage = parseInt(e.target.value);
-            });
-            
             document.getElementById('param-actions').addEventListener('change', (e) => {
                 gameState.params.actionsPerTurn = parseInt(e.target.value);
                 gameState.actionsRemaining = gameState.params.actionsPerTurn;
@@ -2428,6 +2574,7 @@
             gameState.actionsRemaining = gameState.params.actionsPerTurn;
             gameState.actionsPerTurn = gameState.params.actionsPerTurn;
             gameState.usedPieces = new Set();
+            gameState.hasAnyPieceMoved = false;
             gameState.pieces = [];
             gameState.board = new Map();
             gameState.selectedPiece = null;
@@ -2437,6 +2584,7 @@
             gameState.pathBuilding = false;
             gameState.currentPath = [];
             gameState.pathStartPiece = null;
+            gameState.pinningPaths = [];
             
             document.getElementById('victory-modal').classList.remove('active');
             document.getElementById('game-log').innerHTML = '<div class="log-entry system">Game reset.</div>';
