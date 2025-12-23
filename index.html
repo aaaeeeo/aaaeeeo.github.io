@@ -452,38 +452,33 @@
         .unit-btn.player1 { background: var(--player1-dim); }
         .unit-btn.player2 { background: var(--player2-dim); }
 
-        .movement-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 4px;
+        .template-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
             margin: 12px 0;
         }
 
-        .move-dir {
-            aspect-ratio: 1;
-            border: 1px solid var(--border);
+        .template-btn {
+            padding: 12px;
+            border: 2px solid var(--border);
             background: var(--bg-dark);
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-muted);
+            color: var(--text-primary);
+            text-align: center;
+            transition: all 0.15s;
         }
 
-        .move-dir:hover {
-            border-color: var(--text-muted);
+        .template-btn:hover {
+            border-color: var(--accent-gold-dim);
+            background: var(--bg-hex);
         }
 
-        .move-dir.active {
-            background: var(--valid-move);
-            border-color: #4a4;
-        }
-
-        .move-dir.center {
+        .template-btn.active {
             background: var(--accent-gold-dim);
-            cursor: default;
+            border-color: var(--accent-gold);
+            color: var(--bg-dark);
         }
 
         /* Victory Modal */
@@ -706,11 +701,8 @@
                         <span class="param-label">Move Range</span>
                         <input type="number" class="param-input" id="unit-range" value="3" min="1" max="6">
                     </div>
-                    <div class="panel-title" style="margin-top: 12px; margin-bottom: 8px;">Movement Directions</div>
-                    <div class="movement-grid" id="movement-grid"></div>
-                    <div style="font-size: 11px; color: var(--text-muted); text-align: center;">
-                        Click to toggle directions
-                    </div>
+                    <div class="panel-title" style="margin-top: 12px; margin-bottom: 8px;">Movement Template</div>
+                    <div class="template-selector" id="template-selector"></div>
                 </div>
             </div>
 
@@ -772,6 +764,7 @@
             pieces: [],
             board: new Map(), // hex key -> piece
             pinningPaths: [], // Store paths that create pins for visualization
+            pinningMap: new Map(), // Map: enemy piece index -> Set of ally piece indices that are pinning it
             selectedPiece: null,
             validMoves: [],
             rotationMode: false,
@@ -785,47 +778,53 @@
             unitConfigs: {}
         };
 
+        // Movement templates
+        const MOVEMENT_TEMPLATES = {
+            FREE_MOTION: 'free_motion',
+            STRAIGHT_LINE: 'straight_line'
+        };
+
         // Initialize unit configs with default movement patterns
         function initUnitConfigs() {
-            // King: all directions, range 1
+            // King: free motion, range 1
             gameState.unitConfigs['KING'] = {
                 range: 1,
-                directions: [0, 1, 2, 3, 4, 5],
+                template: MOVEMENT_TEMPLATES.FREE_MOTION,
                 hp: Infinity,
                 ramDamage: 1
             };
-            // Pawn: forward directions, range 1
+            // Pawn: free motion, range 2
             gameState.unitConfigs['PAWN'] = {
                 range: 2,
-                directions: [0, 1, 2, 3, 4, 5],
+                template: MOVEMENT_TEMPLATES.FREE_MOTION,
                 hp: 2,
                 ramDamage: 1
             };
-            // Knight: all directions, range 2
+            // Knight: free motion, range 3
             gameState.unitConfigs['KNIGHT'] = {
                 range: 3,
-                directions: [0, 1, 2, 3, 4, 5],
+                template: MOVEMENT_TEMPLATES.FREE_MOTION,
                 hp: 3,
                 ramDamage: 1
             };
-            // Rook: all directions
+            // Rook: free motion
             gameState.unitConfigs['ROOK'] = {
                 range: 5,
-                directions: [0, 1, 2, 3, 4, 5],
+                template: MOVEMENT_TEMPLATES.FREE_MOTION,
                 hp: 3,
                 ramDamage: 1
             };
-            // Bishop: all directions
+            // Bishop: straight line
             gameState.unitConfigs['BISHOP'] = {
                 range: 5,
-                directions: [0, 1, 2, 3, 4, 5],
+                template: MOVEMENT_TEMPLATES.STRAIGHT_LINE,
                 hp: 3,
                 ramDamage: 1
             };
-            // Lance: all directions
+            // Lance: free motion
             gameState.unitConfigs['LANCE'] = {
                 range: 1,
-                directions: [0, 1, 2, 3, 4, 5],
+                template: MOVEMENT_TEMPLATES.FREE_MOTION,
                 hp: 3,
                 ramDamage: 1
             };
@@ -1025,15 +1024,15 @@
                 }
             }
             
-            // Place Bishop, Knight, Rook on ring 4 (guaranteed 3 positions)
+            // Place Rook, Knight, Bishop on ring 4 (guaranteed 3 positions)
             if (ring4Positions.length >= 1) {
-                createPiece('BISHOP', player, ring4Positions[0].q, ring4Positions[0].r);
+                createPiece('ROOK', player, ring4Positions[0].q, ring4Positions[0].r);
             }
             if (ring4Positions.length >= 2) {
                 createPiece('KNIGHT', player, ring4Positions[1].q, ring4Positions[1].r);
             }
             if (ring4Positions.length >= 3) {
-                createPiece('ROOK', player, ring4Positions[2].q, ring4Positions[2].r);
+                createPiece('BISHOP', player, ring4Positions[2].q, ring4Positions[2].r);
             }
             
             // Ring 3: 3 Pawns next to the ring 4 pieces
@@ -1163,14 +1162,14 @@
             if (pieceCounts.KING === 0) {
                 createPiece('KING', player, kingCorner.q, kingCorner.r);
             }
-            if (pieceCounts.BISHOP === 0 && ring4Positions.length > 0) {
-                createPiece('BISHOP', player, ring4Positions[0].q, ring4Positions[0].r);
+            if (pieceCounts.ROOK === 0 && ring4Positions.length > 0) {
+                createPiece('ROOK', player, ring4Positions[0].q, ring4Positions[0].r);
             }
             if (pieceCounts.KNIGHT === 0 && ring4Positions.length > 1) {
                 createPiece('KNIGHT', player, ring4Positions[1].q, ring4Positions[1].r);
             }
-            if (pieceCounts.ROOK === 0 && ring4Positions.length > 2) {
-                createPiece('ROOK', player, ring4Positions[2].q, ring4Positions[2].r);
+            if (pieceCounts.BISHOP === 0 && ring4Positions.length > 2) {
+                createPiece('BISHOP', player, ring4Positions[2].q, ring4Positions[2].r);
             }
             if (pieceCounts.PAWN < 3) {
                 const allRing3 = getHexesInRing(3);
@@ -1383,7 +1382,9 @@
             
             const config = gameState.unitConfigs[piece.type];
             const maxRange = config.range;
-            const validDirections = config.directions;
+            // For templates, all directions are valid for path finding
+            // Template restrictions are enforced during path building
+            const validDirections = [0, 1, 2, 3, 4, 5];
             
             // Use BFS to find all reachable positions
             // Track all paths to each destination, then select the best one
@@ -1484,8 +1485,23 @@
                     let wouldKill = false;
                     
                     if (occupant && occupant.player !== piece.player) {
-                        // Can only end on enemy if it would die (pinned or enough damage)
-                        wouldKill = occupant.pinned || canKillWithRam(piece, occupant, newDamageCount + 1);
+                        // Check if the attacker is pinning this target
+                        const occupantIndex = gameState.pieces.indexOf(occupant);
+                        const attackerIndex = gameState.pieces.indexOf(piece);
+                        const isPinningPiece = occupantIndex >= 0 &&
+                                               attackerIndex >= 0 &&
+                                               gameState.pinningMap.has(occupantIndex) &&
+                                               gameState.pinningMap.get(occupantIndex).has(attackerIndex);
+                        
+                        // If the attacker is pinning the target, they can't insta-kill it
+                        // They must deal enough damage to kill it normally
+                        if (isPinningPiece && occupant.pinned) {
+                            // Attacker is pinning the target - must kill with damage, not insta-kill
+                            wouldKill = canKillWithRam(piece, occupant, newDamageCount + 1);
+                        } else {
+                            // Normal case: pinned pieces die instantly (unless pinned by attacker)
+                            wouldKill = occupant.pinned || canKillWithRam(piece, occupant, newDamageCount + 1);
+                        }
                         isValidDestination = wouldKill;
                     } else {
                         // Empty hex - valid destination
@@ -1528,7 +1544,6 @@
             
             // Get valid adjacent hexes for the next step in path building
             const config = gameState.unitConfigs[piece.type];
-            const validDirections = config.directions;
             const maxRange = config.range;
             
             // If path is at max range, no more steps
@@ -1537,6 +1552,51 @@
             const currentPos = currentPath.length > 0 
                 ? currentPath[currentPath.length - 1]
                 : { q: piece.q, r: piece.r };
+            
+            // Determine valid directions based on template
+            let validDirections = [];
+            
+            if (config.template === MOVEMENT_TEMPLATES.FREE_MOTION) {
+                // Free motion: can move in any direction
+                validDirections = [0, 1, 2, 3, 4, 5];
+            } else if (config.template === MOVEMENT_TEMPLATES.STRAIGHT_LINE) {
+                // Straight line: must continue in the same direction
+                if (currentPath.length === 0) {
+                    // First step: can choose any direction
+                    validDirections = [0, 1, 2, 3, 4, 5];
+                } else {
+                    // Subsequent steps: must continue in the same direction
+                    // Find the direction from the previous position to the current position
+                    let fromPos, toPos;
+                    if (currentPath.length === 1) {
+                        // From piece position to first step
+                        fromPos = { q: piece.q, r: piece.r };
+                        toPos = currentPath[0];
+                    } else {
+                        // From previous step to current step
+                        fromPos = currentPath[currentPath.length - 2];
+                        toPos = currentPath[currentPath.length - 1];
+                    }
+                    
+                    // Find the direction from fromPos to toPos
+                    let direction = -1;
+                    for (let dir = 0; dir < 6; dir++) {
+                        const neighbor = hexNeighbor(fromPos.q, fromPos.r, dir);
+                        if (neighbor.q === toPos.q && neighbor.r === toPos.r) {
+                            direction = dir;
+                            break;
+                        }
+                    }
+                    
+                    // If we found the direction, only allow that direction
+                    if (direction >= 0) {
+                        validDirections = [direction];
+                    } else {
+                        // Fallback: if we can't determine direction, allow all (shouldn't happen)
+                        validDirections = [0, 1, 2, 3, 4, 5];
+                    }
+                }
+            }
             
             const validNext = [];
             
@@ -1589,12 +1649,18 @@
             return gameState.pieces.find(p => p.alive && p.q === q && p.r === r);
         }
 
-        function executeMove(pieceIndex, targetQ, targetR, move) {
+        // Simulate killing pieces along path and check if destination would still be killable
+        function simulateMoveAndValidate(pieceIndex, targetQ, targetR, move, ramDamage) {
             const piece = gameState.pieces[pieceIndex];
-            
-            // Apply damage along path (excluding destination, which is handled separately)
             const destOccupant = getPieceAt(targetQ, targetR);
-            const ramDamage = gameState.unitConfigs[piece.type].ramDamage;
+            
+            // If no destination enemy, move is valid
+            if (!destOccupant || destOccupant.player === piece.player) {
+                return true;
+            }
+            
+            // Create list of pieces that would be killed along the path (excluding destination)
+            const piecesToKill = [];
             if (move.damagePath) {
                 move.damagePath.forEach(pos => {
                     // Skip destination - it will be handled separately
@@ -1602,26 +1668,110 @@
                     
                     const target = pos.piece || getPieceAt(pos.q, pos.r);
                     if (target && target.player !== piece.player) {
-                        applyDamage(target, ramDamage);
-                        // Recalculate pins after each kill (pinned pieces might have been killed)
-                        updatePins();
+                        // Check if this piece would die from the damage
+                        if (target.pinned || canKillWithRam(piece, target, 1)) {
+                            piecesToKill.push(target);
+                        }
                     }
                 });
             }
             
-            // Handle enemy at destination
+            // Temporarily mark pieces as dead to simulate the move
+            const originalAliveStates = new Map();
+            piecesToKill.forEach(target => {
+                originalAliveStates.set(target, target.alive);
+                target.alive = false;
+            });
+            
+            // Recalculate pins with simulated kills
+            updatePins();
+            
+            // Check if destination would still be killable after simulated kills
+            const destAfterSimulation = getPieceAt(targetQ, targetR);
+            if (!destAfterSimulation || destAfterSimulation.player === piece.player) {
+                // Restore original states
+                originalAliveStates.forEach((alive, target) => {
+                    target.alive = alive;
+                });
+                updatePins();
+                return true; // Destination is gone or friendly, move is valid
+            }
+            
+            const totalDamageInstances = 1; // Destination always takes 1 instance of damage
+            
+            // Check if the attacker is pinning this target (using simulated pin state)
+            const occupantIndex = gameState.pieces.indexOf(destAfterSimulation);
+            const attackerIndex = pieceIndex;
+            const isPinningPiece = occupantIndex >= 0 &&
+                                   gameState.pinningMap.has(occupantIndex) &&
+                                   gameState.pinningMap.get(occupantIndex).has(attackerIndex);
+            
+            // Check if destination would die
+            let wouldKill;
+            if (isPinningPiece && destAfterSimulation.pinned) {
+                // Attacker is pinning the target - must kill with damage, not insta-kill
+                wouldKill = canKillWithRam(piece, destAfterSimulation, totalDamageInstances);
+            } else {
+                // Normal case: pinned pieces die instantly (unless pinned by attacker)
+                wouldKill = destAfterSimulation.pinned || canKillWithRam(piece, destAfterSimulation, totalDamageInstances);
+            }
+            
+            // Restore original states
+            originalAliveStates.forEach((alive, target) => {
+                target.alive = alive;
+            });
+            updatePins();
+            
+            return wouldKill;
+        }
+
+        function executeMove(pieceIndex, targetQ, targetR, move) {
+            const piece = gameState.pieces[pieceIndex];
+            const destOccupant = getPieceAt(targetQ, targetR);
+            const ramDamage = gameState.unitConfigs[piece.type].ramDamage;
+            
+            // Validate the entire move by simulating it first
+            if (!simulateMoveAndValidate(pieceIndex, targetQ, targetR, move, ramDamage)) {
+                // Invalid move - don't execute anything
+                addLog('Cannot land on enemy that would survive!', 'system');
+                return false;
+            }
+            
+            // Now that validation passed, apply damage along path (excluding destination)
+            const piecesToDamage = [];
+            if (move.damagePath) {
+                move.damagePath.forEach(pos => {
+                    // Skip destination - it will be handled separately
+                    if (pos.q === targetQ && pos.r === targetR) return;
+                    
+                    const target = pos.piece || getPieceAt(pos.q, pos.r);
+                    if (target && target.player !== piece.player) {
+                        piecesToDamage.push(target);
+                    }
+                });
+            }
+            
+            // Apply damage to pieces along path (not destination)
+            piecesToDamage.forEach(target => {
+                applyDamage(target, ramDamage, pieceIndex);
+                // Recalculate pins after each kill (pinned pieces might have been killed)
+                updatePins();
+            });
+            
+            // Handle enemy at destination (we've already validated it will die)
             if (destOccupant && destOccupant.player !== piece.player) {
-                applyDamage(destOccupant, ramDamage);
+                applyDamage(destOccupant, ramDamage, pieceIndex);
                 // Recalculate pins after damage/kill
                 updatePins();
+                // Double-check that it actually died
                 if (destOccupant.alive) {
-                    // Shouldn't happen if move was valid
-                    console.error('Move validation error');
+                    console.error('Move validation error - destination survived');
+                    addLog('Cannot land on enemy that would survive!', 'system');
                     return false;
                 }
             }
             
-            // Move piece
+            // Only move the piece if we got here (all validations passed and destination died if it was an enemy)
             piece.q = targetQ;
             piece.r = targetR;
             
@@ -1642,9 +1792,19 @@
             return true;
         }
 
-        function applyDamage(piece, damage) {
+        function applyDamage(piece, damage, attackerIndex = null) {
+            // Find the piece index
+            const pieceIndex = gameState.pieces.indexOf(piece);
+            
+            // Check if the attacker is one of the pieces pinning this target
+            const isPinningPiece = attackerIndex !== null && 
+                                   pieceIndex >= 0 &&
+                                   gameState.pinningMap.has(pieceIndex) &&
+                                   gameState.pinningMap.get(pieceIndex).has(attackerIndex);
+            
             // Pinned pieces die immediately when dealt any damage (including King)
-            if (piece.pinned) {
+            // BUT NOT if the attacker is one of the pieces pinning them
+            if (piece.pinned && !isPinningPiece) {
                 piece.alive = false;
                 if (PIECE_TYPES[piece.type].isKing) {
                     addLog(`${piece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
@@ -1656,7 +1816,16 @@
             }
             
             if (PIECE_TYPES[piece.type].isKing) {
-                // King can only be damaged if pinned (already handled above)
+                // King can only be damaged if pinned (and not by pinning piece)
+                // If pinned and attacked by pinning piece, apply normal damage
+                if (piece.pinned && isPinningPiece) {
+                    piece.hp -= damage;
+                    if (piece.hp <= 0) {
+                        piece.alive = false;
+                        addLog(`${piece.player === 1 ? 'P1' : 'P2'} King destroyed!`, 'system');
+                        endGame(piece.player === 1 ? 2 : 1, 'kingkill');
+                    }
+                }
                 return;
             }
             
@@ -1675,8 +1844,9 @@
                 }
             });
             
-            // Clear pinning paths
+            // Clear pinning paths and pinning map
             gameState.pinningPaths = [];
+            gameState.pinningMap.clear();
             
             // Group pieces by player
             const piecesByPlayer = { 1: [], 2: [] };
@@ -1711,7 +1881,11 @@
                                 // Store this pinning path for visualization (with player info)
                                 gameState.pinningPaths.push({ path: path, player: player });
                                 
-                                // Mark all enemies on this path as pinned
+                                // Find the indices of the pinning allies
+                                const ally1Index = gameState.pieces.findIndex(p => p === ally1);
+                                const ally2Index = gameState.pieces.findIndex(p => p === ally2);
+                                
+                                // Mark all enemies on this path as pinned and track which allies are pinning them
                                 path.forEach(step => {
                                     if (step.q === ally1.q && step.r === ally1.r) return;
                                     if (step.q === ally2.q && step.r === ally2.r) return;
@@ -1719,6 +1893,14 @@
                                     const enemy = getPieceAt(step.q, step.r);
                                     if (enemy && enemy.player !== player && enemy.alive) {
                                         enemy.pinned = true;
+                                        
+                                        // Track which allies are pinning this enemy
+                                        const enemyIndex = gameState.pieces.findIndex(p => p === enemy);
+                                        if (!gameState.pinningMap.has(enemyIndex)) {
+                                            gameState.pinningMap.set(enemyIndex, new Set());
+                                        }
+                                        gameState.pinningMap.get(enemyIndex).add(ally1Index);
+                                        gameState.pinningMap.get(enemyIndex).add(ally2Index);
                                     }
                                 });
                             }
@@ -1729,6 +1911,9 @@
             
             // Render pinning paths
             renderPinningPaths();
+            
+            // Check if all enemies are pinned (win condition)
+            checkAllEnemiesPinned();
         }
 
         function renderPinningPaths() {
@@ -2021,13 +2206,33 @@
             });
         }
 
+        function checkAllEnemiesPinned() {
+            [1, 2].forEach(player => {
+                const enemyPlayer = player === 1 ? 2 : 1;
+                const enemyPieces = gameState.pieces.filter(p => 
+                    p.player === enemyPlayer && p.alive
+                );
+                
+                // If there are no enemy pieces, skip (already handled by elimination check)
+                if (enemyPieces.length === 0) return;
+                
+                // Check if all enemy pieces are pinned
+                const allPinned = enemyPieces.every(piece => piece.pinned);
+                
+                if (allPinned) {
+                    endGame(player, 'allpinned');
+                }
+            });
+        }
+
         function endGame(winner, reason) {
             gameState.phase = 'ended';
             
             const reasons = {
                 throne: `Player ${winner} captures the Throne!`,
                 kingkill: `Player ${winner} destroys the enemy King!`,
-                elimination: `Player ${winner} eliminates all enemy units!`
+                elimination: `Player ${winner} eliminates all enemy units!`,
+                allpinned: `Player ${winner} pins all enemy pieces!`
             };
             
             document.getElementById('victory-title').textContent = `Player ${winner} Wins!`;
@@ -2142,6 +2347,9 @@
                     cancelPathBuilding();
                 }
             }
+            
+            // Select the piece type in the unit editor
+            selectUnitForEdit(piece.type);
             
             // Select own piece - start path building
             if (piece.player === gameState.currentPlayer && !gameState.usedPieces.has(index)) {
@@ -2259,11 +2467,31 @@
                 // Check if destination is already in damagePath (would only take 1 instance of damage)
                 const destInPath = damagePath.some(pos => pos.q === destination.q && pos.r === destination.r);
                 const totalDamageInstances = destInPath ? damagePath.length : damagePath.length + 1;
-                // Check if pinned (dies from any damage) or if damage would kill
-                const wouldKill = occupant.pinned || canKillWithRam(piece, occupant, totalDamageInstances);
-                if (!wouldKill) {
-                    addLog('Cannot land on enemy that would survive!', 'system');
-                    return;
+                
+                // Check if the attacker is pinning this target
+                const occupantIndex = gameState.pieces.indexOf(occupant);
+                const attackerIndex = gameState.pathStartPiece;
+                const isPinningPiece = occupantIndex >= 0 &&
+                                       gameState.pinningMap.has(occupantIndex) &&
+                                       gameState.pinningMap.get(occupantIndex).has(attackerIndex);
+                
+                // If the attacker is pinning the target, they can't insta-kill it
+                // They must deal enough damage to kill it normally
+                let wouldKill;
+                if (isPinningPiece && occupant.pinned) {
+                    // Attacker is pinning the target - must kill with damage, not insta-kill
+                    wouldKill = canKillWithRam(piece, occupant, totalDamageInstances);
+                    if (!wouldKill) {
+                        addLog('Cannot kill piece that you are pinning!', 'system');
+                        return;
+                    }
+                } else {
+                    // Normal case: pinned pieces die instantly (unless pinned by attacker)
+                    wouldKill = occupant.pinned || canKillWithRam(piece, occupant, totalDamageInstances);
+                    if (!wouldKill) {
+                        addLog('Cannot land on enemy that would survive!', 'system');
+                        return;
+                    }
                 }
             }
             
@@ -2276,7 +2504,14 @@
                 path: gameState.currentPath
             };
             
-            executeMove(gameState.pathStartPiece, destination.q, destination.r, move);
+            // Only consume action if move succeeds
+            const moveSucceeded = executeMove(gameState.pathStartPiece, destination.q, destination.r, move);
+            if (!moveSucceeded) {
+                // Move was rejected - don't consume action, don't clean up path building
+                // User can try a different move
+                return;
+            }
+            
             useAction(gameState.pathStartPiece);
             
             // Clean up
@@ -2407,23 +2642,39 @@
             Object.entries(PIECE_TYPES).forEach(([type, info]) => {
                 const btn = document.createElement('button');
                 btn.className = 'unit-btn';
+                btn.dataset.type = type;
                 btn.textContent = info.symbol;
                 btn.title = info.name;
                 btn.addEventListener('click', () => selectUnitForEdit(type));
                 selector.appendChild(btn);
             });
             
-            setupMovementGrid();
+            setupTemplateSelector();
         }
 
         function selectUnitForEdit(type) {
             document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
+            // Find and activate the button for this unit type
+            const btn = document.querySelector(`.unit-btn[data-type="${type}"]`);
+            if (btn) {
+                btn.classList.add('active');
+            }
             
             document.getElementById('unit-details').style.display = 'block';
             
             const config = gameState.unitConfigs[type];
-            document.getElementById('unit-range').value = config.range;
+            const rangeInput = document.getElementById('unit-range');
+            rangeInput.value = config.range;
+            
+            // Disable range input for King (always 1)
+            if (type === 'KING') {
+                rangeInput.disabled = true;
+                rangeInput.title = 'King move range is always 1';
+            } else {
+                rangeInput.disabled = false;
+                rangeInput.title = '';
+            }
+            
             document.getElementById('unit-hp').value = config.hp === Infinity ? 999 : config.hp;
             
             // Disable Max HP if it's Infinity (King) or if any piece has ever moved
@@ -2437,48 +2688,32 @@
             
             document.getElementById('unit-ram-damage').value = config.ramDamage;
             
-            // Update movement grid
-            document.querySelectorAll('.move-dir').forEach(d => {
-                const dir = parseInt(d.dataset.dir);
-                if (!isNaN(dir)) {
-                    d.classList.toggle('active', config.directions.includes(dir));
-                }
+            // Update template selector
+            document.querySelectorAll('.template-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.template === config.template);
             });
             
             // Store current editing type
             document.getElementById('unit-details').dataset.type = type;
         }
 
-        function setupMovementGrid() {
-            const grid = document.getElementById('movement-grid');
-            grid.innerHTML = '';
+        function setupTemplateSelector() {
+            const selector = document.getElementById('template-selector');
+            selector.innerHTML = '';
             
-            // 5x5 grid to represent hex directions
-            // Layout approximates hex neighbors
-            const layout = [
-                [null, null, 2, 1, null],
-                [null, null, null, null, null],
-                [3, null, 'C', null, 0],
-                [null, null, null, null, null],
-                [null, 4, 5, null, null]
+            // Create template buttons
+            const templates = [
+                { id: MOVEMENT_TEMPLATES.FREE_MOTION, label: 'Free Motion', desc: 'Move in any direction' },
+                { id: MOVEMENT_TEMPLATES.STRAIGHT_LINE, label: 'Straight Line', desc: 'Pick one direction, continue straight' }
             ];
             
-            const dirLabels = ['E', 'NE', 'NW', 'W', 'SW', 'SE'];
-            
-            layout.flat().forEach((cell, i) => {
-                const div = document.createElement('div');
-                div.className = 'move-dir';
-                
-                if (cell === 'C') {
-                    div.classList.add('center');
-                    div.textContent = '●';
-                } else if (cell !== null) {
-                    div.dataset.dir = cell;
-                    div.textContent = dirLabels[cell];
-                    div.addEventListener('click', () => toggleDirection(cell));
-                }
-                
-                grid.appendChild(div);
+            templates.forEach(template => {
+                const btn = document.createElement('button');
+                btn.className = 'template-btn';
+                btn.dataset.template = template.id;
+                btn.innerHTML = `<div style="font-weight: 600; margin-bottom: 4px;">${template.label}</div><div style="font-size: 10px; color: var(--text-muted);">${template.desc}</div>`;
+                btn.addEventListener('click', () => selectTemplate(template.id));
+                selector.appendChild(btn);
             });
             
             // Range input handler
@@ -2529,25 +2764,15 @@
             });
         }
 
-        function toggleDirection(dir) {
+        function selectTemplate(templateId) {
             const type = document.getElementById('unit-details').dataset.type;
             if (!type) return;
             
-            const config = gameState.unitConfigs[type];
-            const idx = config.directions.indexOf(dir);
-            
-            if (idx >= 0) {
-                config.directions.splice(idx, 1);
-            } else {
-                config.directions.push(dir);
-            }
+            gameState.unitConfigs[type].template = templateId;
             
             // Update UI
-            document.querySelectorAll('.move-dir').forEach(d => {
-                const dDir = parseInt(d.dataset.dir);
-                if (!isNaN(dDir)) {
-                    d.classList.toggle('active', config.directions.includes(dDir));
-                }
+            document.querySelectorAll('.template-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.template === templateId);
             });
         }
 
@@ -2597,6 +2822,7 @@
             gameState.currentPath = [];
             gameState.pathStartPiece = null;
             gameState.pinningPaths = [];
+            gameState.pinningMap.clear();
             
             document.getElementById('victory-modal').classList.remove('active');
             document.getElementById('game-log').innerHTML = '<div class="log-entry system">Game reset.</div>';
