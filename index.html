@@ -747,10 +747,10 @@
         const PIECE_TYPES = {
             KING: { symbol: '♚', name: 'King', defaultHP: Infinity, isKing: true },
             PAWN: { symbol: '♟', name: 'Pawn', defaultHP: 2, isKing: false },
-            KNIGHT: { symbol: '♞', name: 'Knight', defaultHP: 3, isKing: false },
-            ROOK: { symbol: '♜', name: 'Rook', defaultHP: 3, isKing: false },
-            BISHOP: { symbol: '♝', name: 'Bishop', defaultHP: 3, isKing: false },
-            LANCE: { symbol: '⚔', name: 'Lance', defaultHP: 3, isKing: false },
+            KNIGHT: { symbol: '♞', name: 'Knight', defaultHP: 4, isKing: false },
+            ROOK: { symbol: '♜', name: 'Rook', defaultHP: 6, isKing: false },
+            BISHOP: { symbol: '♝', name: 'Bishop', defaultHP: 4, isKing: false },
+            LANCE: { symbol: '⚔', name: 'Lance', defaultHP: 4, isKing: false },
         };
 
         // Game state
@@ -759,6 +759,7 @@
             currentPlayer: 1,
             actionsRemaining: 2,
             actionsPerTurn: 2,
+            isFirstTurn: true,
             usedPieces: new Set(),
             hasAnyPieceMoved: false,
             pieces: [],
@@ -791,7 +792,7 @@
                 range: 1,
                 template: MOVEMENT_TEMPLATES.FREE_MOTION,
                 hp: Infinity,
-                ramDamage: 1
+                ramDamage: 4
             };
             // Pawn: free motion, range 2
             gameState.unitConfigs['PAWN'] = {
@@ -804,29 +805,29 @@
             gameState.unitConfigs['KNIGHT'] = {
                 range: 3,
                 template: MOVEMENT_TEMPLATES.FREE_MOTION,
-                hp: 3,
-                ramDamage: 1
+                hp: 4,
+                ramDamage: 2
             };
             // Rook: free motion
             gameState.unitConfigs['ROOK'] = {
-                range: 5,
+                range: 2,
                 template: MOVEMENT_TEMPLATES.FREE_MOTION,
-                hp: 3,
-                ramDamage: 1
+                hp: 6,
+                ramDamage: 3
             };
             // Bishop: straight line
             gameState.unitConfigs['BISHOP'] = {
                 range: 5,
                 template: MOVEMENT_TEMPLATES.STRAIGHT_LINE,
-                hp: 3,
-                ramDamage: 1
+                hp: 4,
+                ramDamage: 2
             };
             // Lance: free motion
             gameState.unitConfigs['LANCE'] = {
                 range: 1,
                 template: MOVEMENT_TEMPLATES.FREE_MOTION,
-                hp: 3,
-                ramDamage: 1
+                hp: 4,
+                ramDamage: 2
             };
         }
 
@@ -2260,7 +2261,13 @@
             }
             
             gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+            
+            // After the first turn, all players get 2 actions
+            if (gameState.isFirstTurn) {
+                gameState.isFirstTurn = false;
+            }
             gameState.actionsRemaining = gameState.params.actionsPerTurn;
+            
             gameState.usedPieces.clear();
             gameState.selectedPiece = null;
             gameState.validMoves = [];
@@ -2795,20 +2802,23 @@
         function startGame() {
             gameState.phase = 'playing';
             gameState.currentPlayer = 1;
-            gameState.actionsRemaining = gameState.params.actionsPerTurn;
+            gameState.isFirstTurn = true;
+            // First player gets only 1 action on their first turn
+            gameState.actionsRemaining = 1;
             
             updatePins();
             updateUI();
             renderPieces();
             
             addLog('=== GAME STARTED ===', 'system');
-            addLog(`Player 1's Turn`, 'system');
+            addLog(`Player 1's Turn (1 action)`, 'system');
         }
 
         function resetGame() {
             gameState.phase = 'playing';
             gameState.currentPlayer = 1;
-            gameState.actionsRemaining = gameState.params.actionsPerTurn;
+            gameState.isFirstTurn = true;
+            gameState.actionsRemaining = 1; // First player gets 1 action
             gameState.actionsPerTurn = gameState.params.actionsPerTurn;
             gameState.usedPieces = new Set();
             gameState.hasAnyPieceMoved = false;
