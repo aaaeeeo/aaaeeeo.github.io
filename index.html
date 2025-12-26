@@ -1838,6 +1838,9 @@
         }
 
         function updatePins() {
+            // Only calculate pins for the current active player
+            const activePlayer = gameState.currentPlayer;
+            
             // Reset all pin states
             gameState.pieces.forEach(piece => {
                 if (piece.alive) {
@@ -1857,58 +1860,51 @@
                 }
             });
             
-            // Find all ally pairs and check for pinning paths
-            [1, 2].forEach(player => {
-                const allies = piecesByPlayer[player];
-                const enemies = piecesByPlayer[player === 1 ? 2 : 1];
-                
-                // Check all pairs of allies (excluding pinned pieces - they can't create pins)
-                for (let i = 0; i < allies.length; i++) {
-                    for (let j = i + 1; j < allies.length; j++) {
-                        const ally1 = allies[i];
-                        const ally2 = allies[j];
-                        
-                        // Skip if either ally is pinned (pinned pieces cannot create pins)
-                        if (ally1.pinned || ally2.pinned) continue;
-                        
-                        // Find all valid paths between these allies
-                        const paths = findValidPinningPaths(ally1, ally2);
-
-                        console.log(player, i, j, paths);
-                        
-                        // For each path, check if enemies exist at every cell (excluding endpoints)
-                        paths.forEach(path => {
-                            if (isPathPinned(path, enemies)) {
-                                // Store this pinning path for visualization (with player info)
-                                gameState.pinningPaths.push({ path: path, player: player });
+            // Only check paths from the active player's pieces
+            const allies = piecesByPlayer[activePlayer];
+            const enemies = piecesByPlayer[activePlayer === 1 ? 2 : 1];
+            
+            // Check all pairs of allies from the active player
+            for (let i = 0; i < allies.length; i++) {
+                for (let j = i + 1; j < allies.length; j++) {
+                    const ally1 = allies[i];
+                    const ally2 = allies[j];
+                    
+                    // Find all valid paths between these allies
+                    const paths = findValidPinningPaths(ally1, ally2);
+                    
+                    // For each path, check if enemies exist at every cell (excluding endpoints)
+                    paths.forEach(path => {
+                        if (isPathPinned(path, enemies)) {
+                            // Store this pinning path for visualization (with player info)
+                            gameState.pinningPaths.push({ path: path, player: activePlayer });
+                            
+                            // Find the indices of the pinning allies
+                            const ally1Index = gameState.pieces.findIndex(p => p === ally1);
+                            const ally2Index = gameState.pieces.findIndex(p => p === ally2);
+                            
+                            // Mark all enemies on this path as pinned and track which allies are pinning them
+                            path.forEach(step => {
+                                if (step.q === ally1.q && step.r === ally1.r) return;
+                                if (step.q === ally2.q && step.r === ally2.r) return;
                                 
-                                // Find the indices of the pinning allies
-                                const ally1Index = gameState.pieces.findIndex(p => p === ally1);
-                                const ally2Index = gameState.pieces.findIndex(p => p === ally2);
-                                
-                                // Mark all enemies on this path as pinned and track which allies are pinning them
-                                path.forEach(step => {
-                                    if (step.q === ally1.q && step.r === ally1.r) return;
-                                    if (step.q === ally2.q && step.r === ally2.r) return;
+                                const enemy = getPieceAt(step.q, step.r);
+                                if (enemy && enemy.player !== activePlayer && enemy.alive) {
+                                    enemy.pinned = true;
                                     
-                                    const enemy = getPieceAt(step.q, step.r);
-                                    if (enemy && enemy.player !== player && enemy.alive) {
-                                        enemy.pinned = true;
-                                        
-                                        // Track which allies are pinning this enemy
-                                        const enemyIndex = gameState.pieces.findIndex(p => p === enemy);
-                                        if (!gameState.pinningMap.has(enemyIndex)) {
-                                            gameState.pinningMap.set(enemyIndex, new Set());
-                                        }
-                                        gameState.pinningMap.get(enemyIndex).add(ally1Index);
-                                        gameState.pinningMap.get(enemyIndex).add(ally2Index);
+                                    // Track which allies are pinning this enemy
+                                    const enemyIndex = gameState.pieces.findIndex(p => p === enemy);
+                                    if (!gameState.pinningMap.has(enemyIndex)) {
+                                        gameState.pinningMap.set(enemyIndex, new Set());
                                     }
-                                });
-                            }
-                        });
-                    }
+                                    gameState.pinningMap.get(enemyIndex).add(ally1Index);
+                                    gameState.pinningMap.get(enemyIndex).add(ally2Index);
+                                }
+                            });
+                        }
+                    });
                 }
-            });
+            }
             
             // Render pinning paths
             renderPinningPaths();
@@ -2260,6 +2256,15 @@
                 cancelPathBuilding();
             }
             
+            // Clear all pins at the end of the turn
+            gameState.pieces.forEach(piece => {
+                if (piece.alive) {
+                    piece.pinned = false;
+                }
+            });
+            gameState.pinningPaths = [];
+            gameState.pinningMap.clear();
+            
             gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
             
             // After the first turn, all players get 2 actions
@@ -2271,6 +2276,9 @@
             gameState.usedPieces.clear();
             gameState.selectedPiece = null;
             gameState.validMoves = [];
+            
+            // Recalculate pins for the new active player
+            updatePins();
             
             updateUI();
             clearHighlights();
