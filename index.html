@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Throne — Tactical Hex Duel</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <style>
         :root {
             --bg-dark: #0a0a0c;
@@ -102,8 +105,13 @@
             margin-bottom: 8px;
         }
 
-        .turn-indicator.player1 .player-name { color: var(--player1); }
-        .turn-indicator.player2 .player-name { color: var(--player2); }
+        .turn-indicator.player1 .player-name {
+            color: var(--player1);
+        }
+
+        .turn-indicator.player2 .player-name {
+            color: var(--player2);
+        }
 
         .actions-remaining {
             font-family: 'JetBrains Mono', monospace;
@@ -116,15 +124,7 @@
             font-weight: 500;
         }
 
-        .game-phase {
-            text-align: center;
-            padding: 12px;
-            background: var(--accent-gold-dim);
-            color: var(--bg-dark);
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 14px;
-        }
+
 
         .army-display {
             background: var(--bg-hex);
@@ -142,8 +142,13 @@
             gap: 8px;
         }
 
-        .army-title.player1 { color: var(--player1); }
-        .army-title.player2 { color: var(--player2); }
+        .army-title.player1 {
+            color: var(--player1);
+        }
+
+        .army-title.player2 {
+            color: var(--player2);
+        }
 
         .army-pieces {
             display: flex;
@@ -168,17 +173,29 @@
             transform: scale(1.1);
         }
 
-        .army-piece.player1 { background: var(--player1-dim); }
-        .army-piece.player2 { background: var(--player2-dim); }
-        .army-piece.dead { opacity: 0.3; pointer-events: none; }
-        .army-piece.pinned { border-color: var(--pin-indicator); }
+        .army-piece.player1 {
+            background: var(--player1-dim);
+        }
+
+        .army-piece.player2 {
+            background: var(--player2-dim);
+        }
+
+        .army-piece.dead {
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .army-piece.pinned {
+            border-color: var(--pin-indicator);
+        }
 
         /* Board Area */
         .board-area {
             display: flex;
             align-items: center;
             justify-content: center;
-            background: 
+            background:
                 radial-gradient(ellipse at center, rgba(212, 175, 55, 0.03) 0%, transparent 60%),
                 var(--bg-dark);
             position: relative;
@@ -191,39 +208,45 @@
         .hex {
             fill: var(--bg-hex);
             stroke: var(--border);
-            stroke-width: 1;
-            transition: fill 0.15s;
+            stroke-width: 1.1;
+            transition: all 0.2s;
             cursor: pointer;
         }
 
         /* Ring colors - distinct variations to help identify pins */
         .hex.ring-0 {
-            fill: rgba(212, 175, 55, 0.3); /* Throne ring - gold tint */
+            fill: rgba(212, 175, 55, 0.3);
+            /* Throne ring - gold tint */
         }
 
         .hex.ring-1 {
             fill: #0a0a0e;
-            stroke: rgba(80, 20, 20, 0.7);
+            stroke: #ff2e2e;
+            stroke-opacity: 0.2;
         }
 
         .hex.ring-2 {
             fill: #0e0e14;
-            stroke: rgba(20, 80, 20, 0.7);
+            stroke: #22c55e;
+            stroke-opacity: 0.2;
         }
 
         .hex.ring-3 {
             fill: #121218;
-            stroke: rgba(20, 20, 80, 0.7);
+            stroke: #3b82f6;
+            stroke-opacity: 0.2;
         }
 
         .hex.ring-4 {
             fill: #16161c;
-            stroke: rgba(80, 40, 20, 0.7);
+            stroke: #f59e0b;
+            stroke-opacity: 0.2;
         }
 
         .hex.ring-5 {
             fill: #1a1a20;
-            stroke: rgba(40, 20, 80, 0.7);
+            stroke: #df24ff;
+            stroke-opacity: 0.2;
         }
 
         .hex:hover {
@@ -290,12 +313,27 @@
             filter: grayscale(0.7) drop-shadow(0 0 6px var(--pin-indicator));
         }
 
-        .piece-hp {
+        .piece-stat {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            fill: white;
+            font-size: 12px;
             text-anchor: middle;
             pointer-events: none;
+            font-weight: bold;
+            filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.8));
+        }
+
+        .piece-stat.hp {
+            fill: #df24ff;
+            letter-spacing: 1px;
+        }
+
+        .piece-stat.dmg {
+            fill: #e8c34a;
+        }
+
+        .piece-stat.rng {
+            fill: #22c55e;
+            letter-spacing: 1px;
         }
 
         .ring-highlight {
@@ -313,6 +351,16 @@
         }
 
         /* Controls */
+        .action-controls {
+            position: absolute;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 100;
+        }
+
         .game-controls {
             position: absolute;
             bottom: 24px;
@@ -445,12 +493,18 @@
             transition: all 0.15s;
         }
 
-        .unit-btn:hover, .unit-btn.active {
+        .unit-btn:hover,
+        .unit-btn.active {
             border-color: var(--accent-gold);
         }
 
-        .unit-btn.player1 { background: var(--player1-dim); }
-        .unit-btn.player2 { background: var(--player2-dim); }
+        .unit-btn.player1 {
+            background: var(--player1-dim);
+        }
+
+        .unit-btn.player2 {
+            background: var(--player2-dim);
+        }
 
         .template-selector {
             display: flex;
@@ -596,9 +650,17 @@
             border-bottom: none;
         }
 
-        .log-entry.player1 { color: var(--player1); }
-        .log-entry.player2 { color: var(--player2); }
-        .log-entry.system { color: var(--accent-gold); }
+        .log-entry.player1 {
+            color: var(--player1);
+        }
+
+        .log-entry.player2 {
+            color: var(--player2);
+        }
+
+        .log-entry.system {
+            color: var(--accent-gold);
+        }
 
         /* Rotation UI */
         .rotation-controls {
@@ -609,7 +671,7 @@
             padding: 8px 12px;
             border-radius: 6px;
             border: 1px solid var(--accent-gold);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
         }
 
         .rotation-controls button {
@@ -629,18 +691,19 @@
         }
     </style>
 </head>
+
 <body>
     <div class="game-container">
         <!-- Left Panel -->
         <div class="panel">
             <div class="logo">THRONE</div>
-            
+
             <div class="turn-indicator player1" id="turn-indicator">
                 <div class="player-name">Player 1</div>
                 <div class="actions-remaining">Actions: <span id="actions-count">2</span>/2</div>
             </div>
 
-            <div class="game-phase" id="game-phase">BATTLE PHASE</div>
+
 
             <div class="army-display">
                 <div class="army-title player1">⬢ Player 1 Army</div>
@@ -660,16 +723,21 @@
         <!-- Board Area -->
         <div class="board-area">
             <svg id="game-board" width="700" height="700"></svg>
-            <div class="game-controls">
-                <button class="btn" id="btn-reset">Reset Game</button>
+            <div class="action-controls" id="action-controls">
                 <button class="btn rotate" id="btn-rotate" style="display: none;">↻ Rotate Ring</button>
                 <button class="btn primary" id="btn-confirm-path" style="display: none;">Confirm Move</button>
+            </div>
+
+            <div class="game-controls">
+                <button class="btn" id="btn-reset">Reset Game</button>
+                <button class="btn" id="btn-reset-turn" disabled>Reset Turn</button>
                 <button class="btn" id="btn-cancel-path" style="display: none;">Cancel</button>
                 <button class="btn" id="btn-end-turn">End Turn</button>
             </div>
             <div class="rotation-controls" id="rotation-controls" style="display: none;">
                 <button id="rotate-ccw">↺</button>
-                <span style="display: flex; align-items: center; font-size: 12px; color: var(--text-muted);">Ring <span id="rotation-ring">1</span></span>
+                <span style="display: flex; align-items: center; font-size: 12px; color: var(--text-muted);">Ring <span
+                        id="rotation-ring">1</span></span>
                 <button id="rotate-cw">↻</button>
                 <button id="rotate-cancel" style="margin-left: 8px; font-size: 12px;">✕</button>
             </div>
@@ -708,9 +776,13 @@
 
             <div class="panel-title" style="margin-top: 16px;">Instructions</div>
             <div class="param-section" style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
-                <p><strong>Movement:</strong> Click a piece to start path building. Click adjacent hexes to build your path step-by-step. Click the last hex again or "Confirm Move" to execute. Press Escape or "Cancel" to abort.</p>
-                <p style="margin-top: 8px;"><strong>Rotation:</strong> Select your King, then tap "↻ Rotate Ring" button. Select a ring number, then tap ↺ or ↻ to rotate.</p>
-                <p style="margin-top: 8px;"><strong>Victory:</strong> Capture the Throne, eliminate all enemy units, or pin + ram the enemy King.</p>
+                <p><strong>Movement:</strong> Click a piece to start path building. Click adjacent hexes to build your
+                    path step-by-step. Click the last hex again or "Confirm Move" to execute. Press Escape or "Cancel"
+                    to abort.</p>
+                <p style="margin-top: 8px;"><strong>Rotation:</strong> Select your King, then tap "↻ Rotate Ring"
+                    button. Select a ring number, then tap ↺ or ↻ to rotate.</p>
+                <p style="margin-top: 8px;"><strong>Victory:</strong> Capture the Throne, eliminate all enemy units, or
+                    pin + ram the enemy King.</p>
             </div>
         </div>
     </div>
@@ -776,7 +848,8 @@
             params: {
                 actionsPerTurn: 2
             },
-            unitConfigs: {}
+            unitConfigs: {},
+            turnSnapshot: null
         };
 
         // Movement templates
@@ -908,10 +981,10 @@
 
         function getHexesInRing(ring) {
             if (ring === 0) return [{ q: 0, r: 0 }];
-            
+
             const hexes = [];
             let hex = { q: ring, r: 0 }; // Start at E
-            
+
             for (let dir = 2; dir < 8; dir++) {
                 const actualDir = dir % 6;
                 for (let i = 0; i < ring; i++) {
@@ -919,7 +992,7 @@
                     hex = hexNeighbor(hex.q, hex.r, actualDir);
                 }
             }
-            
+
             return hexes;
         }
 
@@ -928,10 +1001,10 @@
             // Using cube coordinates for rotation
             const s = -q - r;
             let newQ = q, newR = r, newS = s;
-            
+
             const absSteps = Math.abs(steps);
             const direction = steps > 0 ? 1 : -1;
-            
+
             for (let i = 0; i < absSteps; i++) {
                 if (direction > 0) {
                     // Clockwise
@@ -941,7 +1014,7 @@
                     [newQ, newR, newS] = [-newS, -newQ, -newR];
                 }
             }
-            
+
             return { q: newQ, r: newR };
         }
 
@@ -951,7 +1024,7 @@
 
         function setupFixedPositions() {
             gameState.pieces = [];
-            
+
             // Pick a random corner for player 1 (6 possible corners on ring 5)
             const corners = [
                 { q: 5, r: 0 },   // E
@@ -962,16 +1035,16 @@
                 { q: 5, r: -5 }  // NE
             ];
             const p1Corner = corners[Math.floor(Math.random() * corners.length)];
-            
+
             // Player 2 gets opposite corner (rotate 180 degrees)
             const p2Corner = rotateHexAroundCenter(p1Corner.q, p1Corner.r, 3);
-            
+
             // Place Player 1 pieces
             placeArmy(1, p1Corner);
-            
+
             // Place Player 2 pieces
             placeArmy(2, p2Corner);
-            
+
             // Update pins after placement
             updatePins();
         }
@@ -979,7 +1052,7 @@
         function placeArmy(player, kingCorner) {
             // King at ring 5 corner
             createPiece('KING', player, kingCorner.q, kingCorner.r);
-            
+
             // Find direction toward center from king corner
             // Calculate which direction points most toward (0,0)
             let bestDir = 0;
@@ -992,7 +1065,7 @@
                     bestDir = dir;
                 }
             }
-            
+
             // Find hexes on ring 4 that are neighbors of the king
             const ring4Candidates = [];
             for (let dir = 0; dir < 6; dir++) {
@@ -1001,17 +1074,17 @@
                     ring4Candidates.push({ pos: neighbor, dir: dir });
                 }
             }
-            
+
             // Sort by proximity to the "inward" direction
             ring4Candidates.sort((a, b) => {
                 const aDist = Math.abs((a.dir - bestDir + 6) % 6);
                 const bDist = Math.abs((b.dir - bestDir + 6) % 6);
                 return aDist - bDist;
             });
-            
+
             // Take first 3 positions for Bishop, Knight, Rook
             const ring4Positions = ring4Candidates.slice(0, 3).map(c => c.pos);
-            
+
             // Ensure we have 3 positions (fallback to any ring 4 neighbors)
             if (ring4Positions.length < 3) {
                 const allRing4 = getHexesInRing(4);
@@ -1024,7 +1097,7 @@
                     }
                 }
             }
-            
+
             // Place Rook, Knight, Bishop on ring 4 (guaranteed 3 positions)
             if (ring4Positions.length >= 1) {
                 createPiece('ROOK', player, ring4Positions[0].q, ring4Positions[0].r);
@@ -1035,22 +1108,22 @@
             if (ring4Positions.length >= 3) {
                 createPiece('BISHOP', player, ring4Positions[2].q, ring4Positions[2].r);
             }
-            
+
             // Ring 3: 3 Pawns next to the ring 4 pieces
             const pawnPositions = [];
-            
+
             // Find hexes on ring 3 that are neighbors of the ring 4 pieces
             for (const ring4Pos of ring4Positions) {
                 for (let dir = 0; dir < 6; dir++) {
                     const neighbor = hexNeighbor(ring4Pos.q, ring4Pos.r, dir);
-                    if (getRing(neighbor.q, neighbor.r) === 3 && 
+                    if (getRing(neighbor.q, neighbor.r) === 3 &&
                         isValidHex(neighbor.q, neighbor.r) &&
                         !pawnPositions.some(p => p.q === neighbor.q && p.r === neighbor.r)) {
                         pawnPositions.push(neighbor);
                     }
                 }
             }
-            
+
             // If we don't have 3 pawn positions, find more from ring 3
             if (pawnPositions.length < 3) {
                 const allRing3 = getHexesInRing(3);
@@ -1069,12 +1142,12 @@
                     }
                 }
             }
-            
+
             // Place 3 Pawns (guaranteed to place all 3)
             for (let i = 0; i < 3 && i < pawnPositions.length; i++) {
                 createPiece('PAWN', player, pawnPositions[i].q, pawnPositions[i].r);
             }
-            
+
             // If we still don't have 3 pawns, place them anywhere on ring 3
             let currentPawnCount = gameState.pieces.filter(p => p.player === player && p.type === 'PAWN').length;
             if (currentPawnCount < 3) {
@@ -1086,22 +1159,22 @@
                     }
                 }
             }
-            
+
             // Get all pawn positions for lance placement check
             const pawnPositionsList = gameState.pieces
                 .filter(p => p.player === player && p.type === 'PAWN')
                 .map(p => ({ q: p.q, r: p.r }));
-            
+
             // Ring 2: Lance should be adjacent to all ally pawns (which are on ring 3)
             const ring2Hexes = getHexesInRing(2);
             let lancePosition = null;
             let maxAdjacentPawns = 0;
-            
+
             // Find a hex on ring 2 that is adjacent to as many pawns as possible
             // Ideally adjacent to all 3 pawns
             for (const hex of ring2Hexes) {
                 if (getPieceAt(hex.q, hex.r)) continue; // Skip if occupied
-                
+
                 // Count how many pawns this hex is adjacent to
                 let adjacentPawnCount = 0;
                 for (const pawn of pawnPositionsList) {
@@ -1109,20 +1182,20 @@
                         adjacentPawnCount++;
                     }
                 }
-                
+
                 // Prefer positions adjacent to more pawns
                 if (adjacentPawnCount > maxAdjacentPawns) {
                     maxAdjacentPawns = adjacentPawnCount;
                     lancePosition = hex;
                 }
             }
-            
+
             // If we found a position adjacent to at least one pawn, use it
             // Otherwise, find any ring 2 hex that's adjacent to at least one pawn
             if (!lancePosition || maxAdjacentPawns === 0) {
                 for (const hex of ring2Hexes) {
                     if (getPieceAt(hex.q, hex.r)) continue;
-                    
+
                     // Check if adjacent to any pawn
                     for (const pawn of pawnPositionsList) {
                         if (hexDistance(hex.q, hex.r, pawn.q, pawn.r) === 1) {
@@ -1133,7 +1206,7 @@
                     if (lancePosition) break;
                 }
             }
-            
+
             // Final fallback: just pick first available ring 2 hex
             if (!lancePosition && ring2Hexes.length > 0) {
                 for (const hex of ring2Hexes) {
@@ -1143,11 +1216,11 @@
                     }
                 }
             }
-            
+
             if (lancePosition) {
                 createPiece('LANCE', player, lancePosition.q, lancePosition.r);
             }
-            
+
             // Verify all pieces were created
             const pieces = gameState.pieces.filter(p => p.player === player);
             const pieceCounts = {
@@ -1158,7 +1231,7 @@
                 BISHOP: pieces.filter(p => p.type === 'BISHOP').length,
                 LANCE: pieces.filter(p => p.type === 'LANCE').length
             };
-            
+
             // Ensure we have all required pieces, create missing ones if needed
             if (pieceCounts.KING === 0) {
                 createPiece('KING', player, kingCorner.q, kingCorner.r);
@@ -1196,7 +1269,7 @@
         function createPiece(type, player, q, r) {
             const config = gameState.unitConfigs[type];
             const hp = config.hp === Infinity ? Infinity : config.hp;
-            
+
             const piece = {
                 type,
                 player,
@@ -1206,7 +1279,7 @@
                 alive: true,
                 pinned: false
             };
-            
+
             gameState.pieces.push(piece);
         }
 
@@ -1229,7 +1302,7 @@
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.id = `ring-${ring}`;
                 path.classList.add('ring-highlight');
-                
+
                 // Create path around ring
                 let d = '';
                 ringHexes.forEach((hex, i) => {
@@ -1252,21 +1325,21 @@
 
                     const { x, y } = hexToPixel(q, r);
                     const corners = getHexCorners(x, y, HEX_SIZE - 2);
-                    
+
                     const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
                     polygon.setAttribute('points', corners.map(c => `${c.x},${c.y}`).join(' '));
                     polygon.classList.add('hex');
                     polygon.dataset.q = q;
                     polygon.dataset.r = r;
-                    
+
                     const ring = getRing(q, r);
                     polygon.classList.add(`ring-${ring}`);
                     polygon.dataset.ring = ring;
-                    
+
                     if (q === 0 && r === 0) {
                         polygon.classList.add('throne');
                     }
-                    
+
                     polygon.addEventListener('click', (e) => onHexClick(q, r, e));
                     hexGroup.appendChild(polygon);
                 }
@@ -1291,11 +1364,11 @@
                 if (!piece.alive) return;
 
                 const { x, y } = hexToPixel(piece.q, piece.r);
-                
+
                 const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                 g.classList.add('piece');
                 g.dataset.index = index;
-                
+
                 if (gameState.selectedPiece === index) {
                     g.classList.add('selected');
                 }
@@ -1327,14 +1400,39 @@
                 text.textContent = PIECE_TYPES[piece.type].symbol;
                 g.appendChild(text);
 
+                // Stats indicators
+                const config = gameState.unitConfigs[piece.type];
+
                 // HP indicator (not for King)
                 if (!PIECE_TYPES[piece.type].isKing && piece.hp < Infinity) {
                     const hpText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                     hpText.setAttribute('x', x + HEX_SIZE * 0.4);
                     hpText.setAttribute('y', y - HEX_SIZE * 0.3);
-                    hpText.classList.add('piece-hp');
-                    hpText.textContent = piece.hp;
+                    hpText.classList.add('piece-stat', 'hp');
+                    hpText.textContent = `♥${piece.hp}`;
                     g.appendChild(hpText);
+                }
+
+                // Damage indicator
+                if (config.ramDamage > 0) {
+                    const dmgText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    dmgText.setAttribute('x', x - HEX_SIZE * 0.4);
+                    dmgText.setAttribute('y', y - HEX_SIZE * 0.3);
+                    dmgText.classList.add('piece-stat', 'dmg');
+                    dmgText.textContent = `🗡${config.ramDamage}`;
+                    g.appendChild(dmgText);
+                }
+
+                // Range indicator
+                if (config.range > 0 && config.range < Infinity) {
+                    const rngText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    rngText.setAttribute('x', x + HEX_SIZE * 0.4);
+                    rngText.setAttribute('y', y + HEX_SIZE * 0.5); // Bottom-right
+                    rngText.classList.add('piece-stat', 'rng');
+
+                    const moveIcon = config.template === MOVEMENT_TEMPLATES.STRAIGHT_LINE ? '↑' : '↝';
+                    rngText.textContent = `${moveIcon}${config.range}`;
+                    g.appendChild(rngText);
                 }
 
                 g.addEventListener('click', (e) => {
@@ -1357,7 +1455,7 @@
                 if (hex) {
                     hex.classList.add(move.willKill ? 'damage-path' : 'valid-move');
                 }
-                
+
                 // Highlight damage path
                 if (move.damagePath) {
                     move.damagePath.forEach(pos => {
@@ -1380,13 +1478,13 @@
 
         function getValidMoves(piece) {
             if (!piece.alive || piece.pinned) return [];
-            
+
             const config = gameState.unitConfigs[piece.type];
             const maxRange = config.range;
             // For templates, all directions are valid for path finding
             // Template restrictions are enforced during path building
             const validDirections = [0, 1, 2, 3, 4, 5];
-            
+
             // Use BFS to find all reachable positions
             // Track all paths to each destination, then select the best one
             const bestPaths = new Map(); // key -> { move, damageCount, distance }
@@ -1397,15 +1495,15 @@
                 damagePath: [],
                 path: [{ q: piece.q, r: piece.r }]
             }];
-            
+
             // Track visited states: key -> Set of (distance, damageCount) pairs
             // This allows revisiting if we find a better path (more damage or shorter)
             const visited = new Map(); // key -> Set of "distance,damageCount" strings
-            
+
             function getVisitedKey(distance, damageCount) {
                 return `${distance},${damageCount}`;
             }
-            
+
             function isBetterPath(newDistance, newDamageCount, existing) {
                 if (!existing) return true;
                 // Prefer paths with more damage, or if same damage, shorter path
@@ -1416,50 +1514,50 @@
                 }
                 return true;
             }
-            
+
             function addVisited(key, distance, damageCount) {
                 if (!visited.has(key)) {
                     visited.set(key, new Set());
                 }
                 visited.get(key).add(getVisitedKey(distance, damageCount));
             }
-            
+
             function shouldExplore(key, distance, damageCount) {
                 const existing = visited.get(key);
                 if (!existing) return true;
                 return isBetterPath(distance, damageCount, existing);
             }
-            
+
             while (queue.length > 0) {
                 const current = queue.shift();
-                
+
                 // Stop if we've reached max range
                 if (current.distance >= maxRange) continue;
-                
+
                 // Try moving in all valid directions from current position
                 validDirections.forEach(dir => {
                     const next = hexNeighbor(current.q, current.r, dir);
                     const nextKey = hexKey(next.q, next.r);
-                    
+
                     // Check if valid hex
                     if (!isValidHex(next.q, next.r)) return;
-                    
+
                     const newDistance = current.distance + 1;
                     const occupant = getPieceAt(next.q, next.r);
                     const newDamagePath = [...current.damagePath];
                     let newDamageCount = newDamagePath.length;
-                    
+
                     // If there's an enemy here, add to damage path
                     if (occupant && occupant.player !== piece.player) {
                         newDamagePath.push({ q: next.q, r: next.r, piece: occupant });
                         newDamageCount = newDamagePath.length;
                     }
-                    
+
                     // Check if we should explore this path
                     if (!shouldExplore(nextKey, newDistance, newDamageCount)) {
                         return;
                     }
-                    
+
                     const newPath = [...current.path, { q: next.q, r: next.r }];
                     const newState = {
                         q: next.q,
@@ -1469,7 +1567,7 @@
                         damageCount: newDamageCount,
                         path: newPath
                     };
-                    
+
                     // If there's a friendly, we can pass through but can't end here
                     if (occupant && occupant.player === piece.player) {
                         // Can pass through - continue exploring
@@ -1477,23 +1575,23 @@
                         queue.push(newState);
                         return;
                     }
-                    
+
                     // Empty hex or enemy hex - can potentially end here
                     addVisited(nextKey, newDistance, newDamageCount);
-                    
+
                     // Check if we can end on this hex
                     let isValidDestination = false;
                     let wouldKill = false;
-                    
+
                     if (occupant && occupant.player !== piece.player) {
                         // Check if the attacker is pinning this target
                         const occupantIndex = gameState.pieces.indexOf(occupant);
                         const attackerIndex = gameState.pieces.indexOf(piece);
                         const isPinningPiece = occupantIndex >= 0 &&
-                                               attackerIndex >= 0 &&
-                                               gameState.pinningMap.has(occupantIndex) &&
-                                               gameState.pinningMap.get(occupantIndex).has(attackerIndex);
-                        
+                            attackerIndex >= 0 &&
+                            gameState.pinningMap.has(occupantIndex) &&
+                            gameState.pinningMap.get(occupantIndex).has(attackerIndex);
+
                         // If the attacker is pinning the target, they can't insta-kill it
                         // They must deal enough damage to kill it normally
                         if (isPinningPiece && occupant.pinned) {
@@ -1508,14 +1606,14 @@
                         // Empty hex - valid destination
                         isValidDestination = true;
                     }
-                    
+
                     if (isValidDestination) {
                         // Check if this is a better path to this destination
                         const existing = bestPaths.get(nextKey);
-                        const isBetter = !existing || 
+                        const isBetter = !existing ||
                             newDamageCount > existing.damageCount ||
                             (newDamageCount === existing.damageCount && newDistance < existing.distance);
-                        
+
                         if (isBetter) {
                             bestPaths.set(nextKey, {
                                 q: next.q,
@@ -1528,12 +1626,12 @@
                             });
                         }
                     }
-                    
+
                     // Continue exploring from this position
                     queue.push(newState);
                 });
             }
-            
+
             return Array.from(bestPaths.values()).map(({ willKill, damagePath, path, q, r }) => ({
                 q, r, damagePath, willKill, path
             }));
@@ -1542,21 +1640,21 @@
         function getValidNextSteps(piece, currentPath) {
             // Pinned pieces cannot move
             if (!piece.alive || piece.pinned) return [];
-            
+
             // Get valid adjacent hexes for the next step in path building
             const config = gameState.unitConfigs[piece.type];
             const maxRange = config.range;
-            
+
             // If path is at max range, no more steps
             if (currentPath.length >= maxRange) return [];
-            
-            const currentPos = currentPath.length > 0 
+
+            const currentPos = currentPath.length > 0
                 ? currentPath[currentPath.length - 1]
                 : { q: piece.q, r: piece.r };
-            
+
             // Determine valid directions based on template
             let validDirections = [];
-            
+
             if (config.template === MOVEMENT_TEMPLATES.FREE_MOTION) {
                 // Free motion: can move in any direction
                 validDirections = [0, 1, 2, 3, 4, 5];
@@ -1578,7 +1676,7 @@
                         fromPos = currentPath[currentPath.length - 2];
                         toPos = currentPath[currentPath.length - 1];
                     }
-                    
+
                     // Find the direction from fromPos to toPos
                     let direction = -1;
                     for (let dir = 0; dir < 6; dir++) {
@@ -1588,7 +1686,7 @@
                             break;
                         }
                     }
-                    
+
                     // If we found the direction, only allow that direction
                     if (direction >= 0) {
                         validDirections = [direction];
@@ -1598,20 +1696,20 @@
                     }
                 }
             }
-            
+
             const validNext = [];
-            
+
             validDirections.forEach(dir => {
                 const next = hexNeighbor(currentPos.q, currentPos.r, dir);
-                
+
                 if (!isValidHex(next.q, next.r)) return;
-                
+
                 // Check if already in path (can't backtrack)
                 const alreadyInPath = currentPath.some(step => step.q === next.q && step.r === next.r);
                 if (alreadyInPath) return;
-                
+
                 const occupant = getPieceAt(next.q, next.r);
-                
+
                 // Can pass through friendlies, but can't end on them
                 // Can pass through enemies (will damage), can end on them if they'd die
                 validNext.push({
@@ -1622,7 +1720,7 @@
                     occupant: occupant
                 });
             });
-            
+
             return validNext;
         }
 
@@ -1654,19 +1752,19 @@
         function simulateMoveAndValidate(pieceIndex, targetQ, targetR, move, ramDamage) {
             const piece = gameState.pieces[pieceIndex];
             const destOccupant = getPieceAt(targetQ, targetR);
-            
+
             // If no destination enemy, move is valid
             if (!destOccupant || destOccupant.player === piece.player) {
                 return true;
             }
-            
+
             // Create list of pieces that would be killed along the path (excluding destination)
             const piecesToKill = [];
             if (move.damagePath) {
                 move.damagePath.forEach(pos => {
                     // Skip destination - it will be handled separately
                     if (pos.q === targetQ && pos.r === targetR) return;
-                    
+
                     const target = pos.piece || getPieceAt(pos.q, pos.r);
                     if (target && target.player !== piece.player) {
                         // Check if this piece would die from the damage
@@ -1676,17 +1774,17 @@
                     }
                 });
             }
-            
+
             // Temporarily mark pieces as dead to simulate the move
             const originalAliveStates = new Map();
             piecesToKill.forEach(target => {
                 originalAliveStates.set(target, target.alive);
                 target.alive = false;
             });
-            
+
             // Recalculate pins with simulated kills
             updatePins();
-            
+
             // Check if destination would still be killable after simulated kills
             const destAfterSimulation = getPieceAt(targetQ, targetR);
             if (!destAfterSimulation || destAfterSimulation.player === piece.player) {
@@ -1697,16 +1795,16 @@
                 updatePins();
                 return true; // Destination is gone or friendly, move is valid
             }
-            
+
             const totalDamageInstances = 1; // Destination always takes 1 instance of damage
-            
+
             // Check if the attacker is pinning this target (using simulated pin state)
             const occupantIndex = gameState.pieces.indexOf(destAfterSimulation);
             const attackerIndex = pieceIndex;
             const isPinningPiece = occupantIndex >= 0 &&
-                                   gameState.pinningMap.has(occupantIndex) &&
-                                   gameState.pinningMap.get(occupantIndex).has(attackerIndex);
-            
+                gameState.pinningMap.has(occupantIndex) &&
+                gameState.pinningMap.get(occupantIndex).has(attackerIndex);
+
             // Check if destination would die
             let wouldKill;
             if (isPinningPiece && destAfterSimulation.pinned) {
@@ -1716,13 +1814,13 @@
                 // Normal case: pinned pieces die instantly (unless pinned by attacker)
                 wouldKill = destAfterSimulation.pinned || canKillWithRam(piece, destAfterSimulation, totalDamageInstances);
             }
-            
+
             // Restore original states
             originalAliveStates.forEach((alive, target) => {
                 target.alive = alive;
             });
             updatePins();
-            
+
             return wouldKill;
         }
 
@@ -1730,35 +1828,35 @@
             const piece = gameState.pieces[pieceIndex];
             const destOccupant = getPieceAt(targetQ, targetR);
             const ramDamage = gameState.unitConfigs[piece.type].ramDamage;
-            
+
             // Validate the entire move by simulating it first
             if (!simulateMoveAndValidate(pieceIndex, targetQ, targetR, move, ramDamage)) {
                 // Invalid move - don't execute anything
                 addLog('Cannot land on enemy that would survive!', 'system');
                 return false;
             }
-            
+
             // Now that validation passed, apply damage along path (excluding destination)
             const piecesToDamage = [];
             if (move.damagePath) {
                 move.damagePath.forEach(pos => {
                     // Skip destination - it will be handled separately
                     if (pos.q === targetQ && pos.r === targetR) return;
-                    
+
                     const target = pos.piece || getPieceAt(pos.q, pos.r);
                     if (target && target.player !== piece.player) {
                         piecesToDamage.push(target);
                     }
                 });
             }
-            
+
             // Apply damage to pieces along path (not destination)
             piecesToDamage.forEach(target => {
                 applyDamage(target, ramDamage, pieceIndex);
                 // Recalculate pins after each kill (pinned pieces might have been killed)
                 updatePins();
             });
-            
+
             // Handle enemy at destination (we've already validated it will die)
             if (destOccupant && destOccupant.player !== piece.player) {
                 applyDamage(destOccupant, ramDamage, pieceIndex);
@@ -1771,38 +1869,38 @@
                     return false;
                 }
             }
-            
+
             // Only move the piece if we got here (all validations passed and destination died if it was an enemy)
             piece.q = targetQ;
             piece.r = targetR;
-            
+
             addLog(`${piece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[piece.type].name} moves to (${targetQ}, ${targetR})`, piece.player);
-            
+
             // Check victory
             if (targetQ === 0 && targetR === 0 && PIECE_TYPES[piece.type].isKing) {
                 endGame(piece.player, 'throne');
                 return true;
             }
-            
+
             // Update pins after move
             updatePins();
-            
+
             // Check army elimination
             checkArmyElimination();
-            
+
             return true;
         }
 
         function applyDamage(piece, damage, attackerIndex = null) {
             // Find the piece index
             const pieceIndex = gameState.pieces.indexOf(piece);
-            
+
             // Check if the attacker is one of the pieces pinning this target
-            const isPinningPiece = attackerIndex !== null && 
-                                   pieceIndex >= 0 &&
-                                   gameState.pinningMap.has(pieceIndex) &&
-                                   gameState.pinningMap.get(pieceIndex).has(attackerIndex);
-            
+            const isPinningPiece = attackerIndex !== null &&
+                pieceIndex >= 0 &&
+                gameState.pinningMap.has(pieceIndex) &&
+                gameState.pinningMap.get(pieceIndex).has(attackerIndex);
+
             // Pinned pieces die immediately when dealt any damage (including King)
             // BUT NOT if the attacker is one of the pieces pinning them
             if (piece.pinned && !isPinningPiece) {
@@ -1815,7 +1913,7 @@
                 }
                 return;
             }
-            
+
             if (PIECE_TYPES[piece.type].isKing) {
                 // King can only be damaged if pinned (and not by pinning piece)
                 // If pinned and attacked by pinning piece, apply normal damage
@@ -1829,7 +1927,7 @@
                 }
                 return;
             }
-            
+
             piece.hp -= damage;
             if (piece.hp <= 0) {
                 piece.alive = false;
@@ -1840,18 +1938,18 @@
         function updatePins() {
             // Only calculate pins for the current active player
             const activePlayer = gameState.currentPlayer;
-            
+
             // Reset all pin states
             gameState.pieces.forEach(piece => {
                 if (piece.alive) {
                     piece.pinned = false;
                 }
             });
-            
+
             // Clear pinning paths and pinning map
             gameState.pinningPaths = [];
             gameState.pinningMap.clear();
-            
+
             // Group pieces by player
             const piecesByPlayer = { 1: [], 2: [] };
             gameState.pieces.forEach(piece => {
@@ -1859,39 +1957,39 @@
                     piecesByPlayer[piece.player].push(piece);
                 }
             });
-            
+
             // Only check paths from the active player's pieces
             const allies = piecesByPlayer[activePlayer];
             const enemies = piecesByPlayer[activePlayer === 1 ? 2 : 1];
-            
+
             // Check all pairs of allies from the active player
             for (let i = 0; i < allies.length; i++) {
                 for (let j = i + 1; j < allies.length; j++) {
                     const ally1 = allies[i];
                     const ally2 = allies[j];
-                    
+
                     // Find all valid paths between these allies
                     const paths = findValidPinningPaths(ally1, ally2);
-                    
+
                     // For each path, check if enemies exist at every cell (excluding endpoints)
                     paths.forEach(path => {
                         if (isPathPinned(path, enemies)) {
                             // Store this pinning path for visualization (with player info)
                             gameState.pinningPaths.push({ path: path, player: activePlayer });
-                            
+
                             // Find the indices of the pinning allies
                             const ally1Index = gameState.pieces.findIndex(p => p === ally1);
                             const ally2Index = gameState.pieces.findIndex(p => p === ally2);
-                            
+
                             // Mark all enemies on this path as pinned and track which allies are pinning them
                             path.forEach(step => {
                                 if (step.q === ally1.q && step.r === ally1.r) return;
                                 if (step.q === ally2.q && step.r === ally2.r) return;
-                                
+
                                 const enemy = getPieceAt(step.q, step.r);
                                 if (enemy && enemy.player !== activePlayer && enemy.alive) {
                                     enemy.pinned = true;
-                                    
+
                                     // Track which allies are pinning this enemy
                                     const enemyIndex = gameState.pieces.findIndex(p => p === enemy);
                                     if (!gameState.pinningMap.has(enemyIndex)) {
@@ -1905,10 +2003,10 @@
                     });
                 }
             }
-            
+
             // Render pinning paths
             renderPinningPaths();
-            
+
             // Check if all enemies are pinned (win condition)
             checkAllEnemiesPinned();
         }
@@ -1916,20 +2014,20 @@
         function renderPinningPaths() {
             const pinningGroup = document.getElementById('pinning-paths-group');
             if (!pinningGroup) return;
-            
+
             // Clear existing paths
             pinningGroup.innerHTML = '';
-            
+
             // Render each pinning path
             gameState.pinningPaths.forEach(pinningData => {
                 const path = pinningData.path;
                 const player = pinningData.player;
-                
+
                 if (path.length < 2) return;
-                
+
                 // Create a path element
                 const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                
+
                 // Build path data
                 let pathData = '';
                 path.forEach((step, index) => {
@@ -1940,13 +2038,13 @@
                         pathData += ` L ${x} ${y}`;
                     }
                 });
-                
+
                 // Use team color for the pin line
                 const teamColor = player === 1 ? 'var(--player1)' : 'var(--player2)';
                 // Make blue (player 2) pins more visible
                 const opacity = player === 2 ? '0.6' : '0.4';
                 const strokeWidth = player === 2 ? '3' : '2';
-                
+
                 pathElement.setAttribute('d', pathData);
                 pathElement.setAttribute('stroke', teamColor);
                 pathElement.setAttribute('stroke-width', strokeWidth);
@@ -1954,7 +2052,7 @@
                 pathElement.setAttribute('opacity', opacity);
                 pathElement.setAttribute('stroke-dasharray', '4 4');
                 pathElement.style.pointerEvents = 'none';
-                
+
                 pinningGroup.appendChild(pathElement);
             });
         }
@@ -1963,7 +2061,7 @@
             const paths = [];
             const startRing = getRing(start.q, start.r);
             const endRing = getRing(end.q, end.r);
-            
+
             // Try strictly monotonic paths (no throne)
             if (startRing < endRing) {
                 // Strictly increasing
@@ -1972,7 +2070,7 @@
                 // Strictly decreasing
                 findMonotonicPath(start.q, start.r, end.q, end.r, startRing, endRing, false, []);
             }
-            
+
             // Try paths that go through throne (allows direction reversal)
             // Determine initial direction based on start and target
             // We can start increasing or decreasing, then reverse at throne
@@ -1998,64 +2096,64 @@
                     findPathThroughThrone(start.q, start.r, end.q, end.r, startRing, endRing, false, true, [], undefined);
                 }
             }
-            
+
             function findMonotonicPath(q, r, targetQ, targetR, currentRing, targetRing, increasing, path) {
                 const currentPath = [...path, { q, r }];
-                
+
                 // Reached target
                 if (q === targetQ && r === targetR) {
                     paths.push(currentPath);
                     return;
                 }
-                
+
                 // Limit path length
                 if (currentPath.length >= 15) return;
-                
+
                 for (let dir = 0; dir < 6; dir++) {
                     const neighbor = hexNeighbor(q, r, dir);
                     if (!isValidHex(neighbor.q, neighbor.r)) continue;
-                    
+
                     const neighborRing = getRing(neighbor.q, neighbor.r);
-                    
+
                     // Check if already in path
                     if (currentPath.some(step => step.q === neighbor.q && step.r === neighbor.r)) continue;
-                    
+
                     // Must be strictly monotonic
                     if (increasing) {
                         if (neighborRing <= currentRing || neighborRing > targetRing) continue;
                     } else {
                         if (neighborRing >= currentRing || neighborRing < targetRing) continue;
                     }
-                    
+
                     findMonotonicPath(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, increasing, currentPath);
                 }
             }
-            
+
             function findPathThroughThrone(q, r, targetQ, targetR, currentRing, targetRing, beforeIncreasing, afterIncreasing, path, throneEntryDir) {
                 const currentPath = [...path, { q, r }];
-                
+
                 // Reached target
                 if (q === targetQ && r === targetR && currentPath.length > 1) {
                     paths.push(currentPath);
                     return;
                 }
-                
+
                 // Limit path length
                 if (currentPath.length >= 15) return;
-                
+
                 const isBeforeThrone = throneEntryDir === undefined && currentRing !== 0;
                 const isAtThrone = currentRing === 0;
                 const isAfterThrone = throneEntryDir !== undefined && currentRing !== 0;
-                
+
                 for (let dir = 0; dir < 6; dir++) {
                     const neighbor = hexNeighbor(q, r, dir);
                     if (!isValidHex(neighbor.q, neighbor.r)) continue;
-                    
+
                     const neighborRing = getRing(neighbor.q, neighbor.r);
-                    
+
                     // Check if already in path
                     if (currentPath.some(step => step.q === neighbor.q && step.r === neighbor.r)) continue;
-                    
+
                     if (isBeforeThrone) {
                         // Before throne - follow initial direction toward throne
                         const increasing = beforeIncreasing;
@@ -2064,7 +2162,7 @@
                         } else {
                             if (neighborRing >= currentRing) continue; // Must decrease
                         }
-                        
+
                         if (neighborRing === 0) {
                             // Entering throne - remember entry direction
                             // When we move from current cell to throne in direction 'dir',
@@ -2084,7 +2182,7 @@
                         // They should be opposite: exit should be (throneEntryDir + 3) % 6
                         const requiredExitDir = (throneEntryDir + 3) % 6;
                         if (dir !== requiredExitDir) continue; // Must exit opposite to entry
-                        
+
                         // Check if we're exiting directly to the target
                         // (This will also be checked at the start of the recursive call, but being explicit here)
                         if (neighbor.q === targetQ && neighbor.r === targetR) {
@@ -2093,7 +2191,7 @@
                             paths.push(finalPath);
                             continue;
                         }
-                        
+
                         // After throne, follow reversed direction
                         findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, beforeIncreasing, afterIncreasing, currentPath, throneEntryDir);
                     } else if (isAfterThrone) {
@@ -2118,7 +2216,7 @@
                             }
                             // Allow continuing to other rings if needed
                         }
-                        
+
                         const increasing = afterIncreasing;
                         if (increasing) {
                             if (neighborRing <= currentRing) continue; // Must strictly increase
@@ -2127,12 +2225,12 @@
                             if (neighborRing >= currentRing) continue; // Must strictly decrease
                             if (neighborRing < targetRing) continue; // Can't go below target
                         }
-                        
+
                         findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, beforeIncreasing, afterIncreasing, currentPath, throneEntryDir);
                     }
                 }
             }
-            
+
             return paths;
         }
 
@@ -2152,33 +2250,33 @@
             for (let i = 1; i < path.length - 1; i++) {
                 const step = path[i];
                 const occupant = getPieceAt(step.q, step.r);
-                
+
                 // Must have an enemy at this position
                 if (!occupant || !occupant.alive) return false;
                 if (!enemies.includes(occupant)) return false;
             }
-            
+
             return path.length > 2; // Path must have at least 3 cells (start, middle, end)
         }
 
         function executeRotation(ring, clockwise) {
             const ringHexes = getHexesInRing(ring);
-            const piecesInRing = gameState.pieces.filter(p => 
+            const piecesInRing = gameState.pieces.filter(p =>
                 p.alive && getRing(p.q, p.r) === ring
             );
-            
+
             // Rotate each piece
             piecesInRing.forEach(piece => {
                 const rotated = rotateHexAroundCenter(piece.q, piece.r, clockwise ? 1 : -1);
                 piece.q = rotated.q;
                 piece.r = rotated.r;
             });
-            
+
             addLog(`${gameState.currentPlayer === 1 ? 'P1' : 'P2'} King rotates ring ${ring} ${clockwise ? 'CW' : 'CCW'}`, gameState.currentPlayer);
-            
+
             // Update pins after rotation
             updatePins();
-            
+
             // Check for pin + ram kills
             checkPinnedKings();
         }
@@ -2194,7 +2292,7 @@
 
         function checkArmyElimination() {
             [1, 2].forEach(player => {
-                const nonKingPieces = gameState.pieces.filter(p => 
+                const nonKingPieces = gameState.pieces.filter(p =>
                     p.player === player && p.alive && !PIECE_TYPES[p.type].isKing
                 );
                 if (nonKingPieces.length === 0) {
@@ -2206,16 +2304,16 @@
         function checkAllEnemiesPinned() {
             [1, 2].forEach(player => {
                 const enemyPlayer = player === 1 ? 2 : 1;
-                const enemyPieces = gameState.pieces.filter(p => 
+                const enemyPieces = gameState.pieces.filter(p =>
                     p.player === enemyPlayer && p.alive
                 );
-                
+
                 // If there are no enemy pieces, skip (already handled by elimination check)
                 if (enemyPieces.length === 0) return;
-                
+
                 // Check if all enemy pieces are pinned
                 const allPinned = enemyPieces.every(piece => piece.pinned);
-                
+
                 if (allPinned) {
                     endGame(player, 'allpinned');
                 }
@@ -2224,18 +2322,18 @@
 
         function endGame(winner, reason) {
             gameState.phase = 'ended';
-            
+
             const reasons = {
                 throne: `Player ${winner} captures the Throne!`,
                 kingkill: `Player ${winner} destroys the enemy King!`,
                 elimination: `Player ${winner} eliminates all enemy units!`,
                 allpinned: `Player ${winner} pins all enemy pieces!`
             };
-            
+
             document.getElementById('victory-title').textContent = `Player ${winner} Wins!`;
             document.getElementById('victory-message').textContent = reasons[reason];
             document.getElementById('victory-modal').classList.add('active');
-            
+
             addLog(`VICTORY: ${reasons[reason]}`, 'system');
         }
 
@@ -2243,9 +2341,8 @@
             gameState.usedPieces.add(pieceIndex);
             gameState.hasAnyPieceMoved = true;
             gameState.actionsRemaining--;
-            
-            document.getElementById('actions-count').textContent = gameState.actionsRemaining;
-            
+            updateUI();
+
             if (gameState.actionsRemaining <= 0) {
                 endTurn();
             }
@@ -2255,7 +2352,7 @@
             if (gameState.pathBuilding) {
                 cancelPathBuilding();
             }
-            
+
             // Clear all pins at the end of the turn
             gameState.pieces.forEach(piece => {
                 if (piece.alive) {
@@ -2264,28 +2361,59 @@
             });
             gameState.pinningPaths = [];
             gameState.pinningMap.clear();
-            
+
             gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
-            
+
             // After the first turn, all players get 2 actions
             if (gameState.isFirstTurn) {
                 gameState.isFirstTurn = false;
             }
             gameState.actionsRemaining = gameState.params.actionsPerTurn;
-            
+
             gameState.usedPieces.clear();
             gameState.selectedPiece = null;
             gameState.validMoves = [];
-            
-            // Recalculate pins for the new active player
+
             updatePins();
-            
+            saveTurnSnapshot();
+
             updateUI();
             clearHighlights();
             renderPieces();
             document.getElementById('btn-rotate').style.display = 'none';
-            
+
             addLog(`--- Player ${gameState.currentPlayer}'s Turn ---`, 'system');
+        }
+
+        function saveTurnSnapshot() {
+            gameState.turnSnapshot = {
+                pieces: JSON.parse(JSON.stringify(gameState.pieces)),
+                actionsRemaining: gameState.actionsRemaining,
+                hasAnyPieceMoved: gameState.hasAnyPieceMoved
+            };
+        }
+
+        function resetTurn() {
+            if (!gameState.turnSnapshot) return;
+
+            gameState.pieces = JSON.parse(JSON.stringify(gameState.turnSnapshot.pieces));
+            gameState.actionsRemaining = gameState.turnSnapshot.actionsRemaining;
+            gameState.hasAnyPieceMoved = gameState.turnSnapshot.hasAnyPieceMoved;
+
+            gameState.usedPieces.clear();
+            gameState.selectedPiece = null;
+            gameState.validMoves = [];
+
+            if (gameState.pathBuilding) cancelPathBuilding();
+            if (gameState.rotationMode) exitRotationMode();
+
+            updatePins();
+            updateUI();
+            updateArmyDisplay();
+            clearHighlights();
+            renderPieces();
+
+            addLog(`Turn reset to start of Player ${gameState.currentPlayer}'s turn.`, 'system');
         }
 
         // ============================================
@@ -2294,18 +2422,18 @@
 
         function onHexClick(q, r, e) {
             if (gameState.phase !== 'playing') return;
-            
+
             if (gameState.rotationMode) {
                 handleRotationClick(q, r);
                 return;
             }
-            
+
             // Path building mode
             if (gameState.pathBuilding && gameState.pathStartPiece !== null) {
                 const piece = gameState.pieces[gameState.pathStartPiece];
                 const validNext = getValidNextSteps(piece, gameState.currentPath);
                 const clickedStep = validNext.find(step => step.q === q && step.r === r);
-                
+
                 if (clickedStep) {
                     // Add this step to path
                     gameState.currentPath.push({ q, r });
@@ -2324,7 +2452,7 @@
                 }
                 return;
             }
-            
+
             // Old behavior - deselect
             if (gameState.selectedPiece !== null) {
                 gameState.selectedPiece = null;
@@ -2337,21 +2465,21 @@
 
         function onPieceClick(index) {
             const piece = gameState.pieces[index];
-            
+
             if (gameState.phase !== 'playing') return;
-            
+
             // In rotation mode, treat piece clicks same as hex clicks - select the ring
             if (gameState.rotationMode) {
                 handleRotationClick(piece.q, piece.r);
                 return;
             }
-            
+
             // If we're in path building mode, check if this piece is on a valid next step
             if (gameState.pathBuilding && gameState.pathStartPiece !== null) {
                 const pathPiece = gameState.pieces[gameState.pathStartPiece];
                 const validNext = getValidNextSteps(pathPiece, gameState.currentPath);
                 const clickedStep = validNext.find(step => step.q === piece.q && step.r === piece.r);
-                
+
                 if (clickedStep) {
                     // This piece is on a valid move tile - continue the path
                     gameState.currentPath.push({ q: piece.q, r: piece.r });
@@ -2362,10 +2490,10 @@
                     cancelPathBuilding();
                 }
             }
-            
+
             // Select the piece type in the unit editor
             selectUnitForEdit(piece.type);
-            
+
             // Select own piece - start path building
             if (piece.player === gameState.currentPlayer && !gameState.usedPieces.has(index)) {
                 // Pinned pieces cannot be selected
@@ -2379,26 +2507,26 @@
 
         function startPathBuilding(pieceIndex) {
             const piece = gameState.pieces[pieceIndex];
-            
+
             // Pinned pieces cannot take actions
             if (piece.pinned) {
                 addLog('Pinned pieces cannot move or take actions!', 'system');
                 return;
             }
-            
+
             gameState.pathBuilding = true;
             gameState.pathStartPiece = pieceIndex;
             gameState.currentPath = [];
             gameState.selectedPiece = pieceIndex;
-            
+
             // Show rotate button if King (and not pinned)
             const rotateBtn = document.getElementById('btn-rotate');
             if (PIECE_TYPES[piece.type].isKing && !piece.pinned) {
-                rotateBtn.style.display = 'block';
+                rotateBtn.style.display = 'flex';
             } else {
                 rotateBtn.style.display = 'none';
             }
-            
+
             updatePathVisualization();
         }
 
@@ -2416,12 +2544,12 @@
 
         function updatePathVisualization() {
             if (!gameState.pathBuilding || gameState.pathStartPiece === null) return;
-            
+
             const piece = gameState.pieces[gameState.pathStartPiece];
             const validNext = getValidNextSteps(piece, gameState.currentPath);
-            
+
             clearHighlights();
-            
+
             // Highlight current path
             gameState.currentPath.forEach((step, idx) => {
                 const hex = document.querySelector(`.hex[data-q="${step.q}"][data-r="${step.r}"]`);
@@ -2433,7 +2561,7 @@
                     }
                 }
             });
-            
+
             // Highlight valid next steps
             validNext.forEach(step => {
                 const hex = document.querySelector(`.hex[data-q="${step.q}"][data-r="${step.r}"]`);
@@ -2445,17 +2573,17 @@
                     }
                 }
             });
-            
+
             // Show confirm/cancel buttons
             const confirmBtn = document.getElementById('btn-confirm-path');
             const cancelBtn = document.getElementById('btn-cancel-path');
             if (gameState.currentPath.length > 0) {
-                confirmBtn.style.display = 'block';
+                confirmBtn.style.display = 'flex';
             } else {
                 confirmBtn.style.display = 'none';
             }
-            cancelBtn.style.display = 'block';
-            
+            cancelBtn.style.display = 'inline-block';
+
             renderPieces();
         }
 
@@ -2463,33 +2591,33 @@
             if (!gameState.pathBuilding || gameState.pathStartPiece === null || gameState.currentPath.length === 0) {
                 return;
             }
-            
+
             const piece = gameState.pieces[gameState.pathStartPiece];
             const destination = gameState.currentPath[gameState.currentPath.length - 1];
             const damagePath = calculateDamagePath(piece, gameState.currentPath);
-            
+
             // Check if destination is valid
             const occupant = getPieceAt(destination.q, destination.r);
-            
+
             // Cannot land on friendly
             if (occupant && occupant.player === piece.player) {
                 addLog('Cannot land on friendly unit!', 'system');
                 return;
             }
-            
+
             // If landing on enemy, must kill it
             if (occupant && occupant.player !== piece.player) {
                 // Check if destination is already in damagePath (would only take 1 instance of damage)
                 const destInPath = damagePath.some(pos => pos.q === destination.q && pos.r === destination.r);
                 const totalDamageInstances = destInPath ? damagePath.length : damagePath.length + 1;
-                
+
                 // Check if the attacker is pinning this target
                 const occupantIndex = gameState.pieces.indexOf(occupant);
                 const attackerIndex = gameState.pathStartPiece;
                 const isPinningPiece = occupantIndex >= 0 &&
-                                       gameState.pinningMap.has(occupantIndex) &&
-                                       gameState.pinningMap.get(occupantIndex).has(attackerIndex);
-                
+                    gameState.pinningMap.has(occupantIndex) &&
+                    gameState.pinningMap.get(occupantIndex).has(attackerIndex);
+
                 // If the attacker is pinning the target, they can't insta-kill it
                 // They must deal enough damage to kill it normally
                 let wouldKill;
@@ -2509,7 +2637,7 @@
                     }
                 }
             }
-            
+
             // Execute the move
             const move = {
                 q: destination.q,
@@ -2518,7 +2646,7 @@
                 willKill: occupant && occupant.player !== piece.player,
                 path: gameState.currentPath
             };
-            
+
             // Only consume action if move succeeds
             const moveSucceeded = executeMove(gameState.pathStartPiece, destination.q, destination.r, move);
             if (!moveSucceeded) {
@@ -2526,9 +2654,9 @@
                 // User can try a different move
                 return;
             }
-            
+
             useAction(gameState.pathStartPiece);
-            
+
             // Clean up
             cancelPathBuilding();
             updateArmyDisplay();
@@ -2538,10 +2666,10 @@
         function handleRotationClick(q, r) {
             const ring = getRing(q, r);
             if (ring === 0 || ring > BOARD_RADIUS) return;
-            
+
             gameState.selectedRing = ring;
             document.getElementById('rotation-ring').textContent = ring;
-            
+
             // Highlight selected ring
             document.querySelectorAll('.ring-highlight').forEach(el => el.classList.remove('active'));
             document.getElementById(`ring-${ring}`).classList.add('active');
@@ -2557,7 +2685,7 @@
                     renderPieces();
                 }
             });
-            
+
             document.getElementById('rotate-ccw').addEventListener('click', () => {
                 if (gameState.selectedRing) {
                     executeRotation(gameState.selectedRing, false);
@@ -2567,7 +2695,7 @@
                     renderPieces();
                 }
             });
-            
+
             document.getElementById('rotate-cancel').addEventListener('click', () => {
                 exitRotationMode();
             });
@@ -2576,22 +2704,23 @@
         function enterRotationMode(pieceIndex) {
             const piece = gameState.pieces[pieceIndex];
             if (!PIECE_TYPES[piece.type].isKing) return;
-            
+
             // Pinned pieces cannot take actions
             if (piece.pinned) {
                 addLog('Pinned pieces cannot move or take actions!', 'system');
                 return;
             }
-            
+
             gameState.rotationMode = true;
             gameState.selectedRing = 1;
-            
+
+            document.getElementById('action-controls').style.display = 'none';
             const controls = document.getElementById('rotation-controls');
             controls.style.display = 'flex';
-            controls.style.top = '80px';
+            controls.style.top = '24px';
             controls.style.left = '50%';
             controls.style.transform = 'translateX(-50%)';
-            
+
             document.getElementById('rotation-ring').textContent = '1';
             document.getElementById(`ring-1`).classList.add('active');
         }
@@ -2600,6 +2729,7 @@
             gameState.rotationMode = false;
             gameState.selectedRing = null;
             document.getElementById('rotation-controls').style.display = 'none';
+            document.getElementById('action-controls').style.display = 'flex';
             document.querySelectorAll('.ring-highlight').forEach(el => el.classList.remove('active'));
         }
 
@@ -2612,11 +2742,17 @@
             indicator.className = `turn-indicator player${gameState.currentPlayer}`;
             indicator.querySelector('.player-name').textContent = `Player ${gameState.currentPlayer}`;
             document.getElementById('actions-count').textContent = gameState.actionsRemaining;
-            
-            document.getElementById('game-phase').textContent = 
-                gameState.phase === 'playing' ? 'BATTLE PHASE' : 'GAME OVER';
-            
+
+
+
             document.getElementById('btn-end-turn').disabled = gameState.phase !== 'playing';
+
+            // Reset Turn button enablement
+            const resetTurnBtn = document.getElementById('btn-reset-turn');
+            if (resetTurnBtn) {
+                const totalActionsForTurn = gameState.isFirstTurn ? 1 : gameState.params.actionsPerTurn;
+                resetTurnBtn.disabled = gameState.phase !== 'playing' || gameState.actionsRemaining >= totalActionsForTurn;
+            }
         }
 
 
@@ -2624,7 +2760,7 @@
             [1, 2].forEach(player => {
                 const container = document.getElementById(`army-p${player}`);
                 container.innerHTML = '';
-                
+
                 gameState.pieces.filter(p => p.player === player).forEach((piece, idx) => {
                     const div = document.createElement('div');
                     div.className = `army-piece player${player}`;
@@ -2653,7 +2789,7 @@
 
         function setupUnitEditor() {
             const selector = document.getElementById('unit-selector');
-            
+
             Object.entries(PIECE_TYPES).forEach(([type, info]) => {
                 const btn = document.createElement('button');
                 btn.className = 'unit-btn';
@@ -2663,7 +2799,7 @@
                 btn.addEventListener('click', () => selectUnitForEdit(type));
                 selector.appendChild(btn);
             });
-            
+
             setupTemplateSelector();
         }
 
@@ -2674,13 +2810,13 @@
             if (btn) {
                 btn.classList.add('active');
             }
-            
+
             document.getElementById('unit-details').style.display = 'block';
-            
+
             const config = gameState.unitConfigs[type];
             const rangeInput = document.getElementById('unit-range');
             rangeInput.value = config.range;
-            
+
             // Disable range input for King (always 1)
             if (type === 'KING') {
                 rangeInput.disabled = true;
@@ -2689,9 +2825,9 @@
                 rangeInput.disabled = false;
                 rangeInput.title = '';
             }
-            
+
             document.getElementById('unit-hp').value = config.hp === Infinity ? 999 : config.hp;
-            
+
             // Disable Max HP if it's Infinity (King) or if any piece has ever moved
             const hpInput = document.getElementById('unit-hp');
             hpInput.disabled = config.hp === Infinity || gameState.hasAnyPieceMoved;
@@ -2700,14 +2836,14 @@
             } else {
                 hpInput.title = '';
             }
-            
+
             document.getElementById('unit-ram-damage').value = config.ramDamage;
-            
+
             // Update template selector
             document.querySelectorAll('.template-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.template === config.template);
             });
-            
+
             // Store current editing type
             document.getElementById('unit-details').dataset.type = type;
         }
@@ -2715,13 +2851,13 @@
         function setupTemplateSelector() {
             const selector = document.getElementById('template-selector');
             selector.innerHTML = '';
-            
+
             // Create template buttons
             const templates = [
                 { id: MOVEMENT_TEMPLATES.FREE_MOTION, label: 'Free Motion', desc: 'Move in any direction' },
                 { id: MOVEMENT_TEMPLATES.STRAIGHT_LINE, label: 'Straight Line', desc: 'Pick one direction, continue straight' }
             ];
-            
+
             templates.forEach(template => {
                 const btn = document.createElement('button');
                 btn.className = 'template-btn';
@@ -2730,17 +2866,18 @@
                 btn.addEventListener('click', () => selectTemplate(template.id));
                 selector.appendChild(btn);
             });
-            
+
             // Range input handler
-            document.getElementById('unit-range').addEventListener('change', (e) => {
+            document.getElementById('unit-range').addEventListener('input', (e) => {
                 const type = document.getElementById('unit-details').dataset.type;
                 if (type) {
                     gameState.unitConfigs[type].range = parseInt(e.target.value);
+                    renderPieces();
                 }
             });
-            
+
             // HP input handler
-            document.getElementById('unit-hp').addEventListener('change', (e) => {
+            document.getElementById('unit-hp').addEventListener('input', (e) => {
                 const type = document.getElementById('unit-details').dataset.type;
                 if (type) {
                     // Check if any piece has ever moved
@@ -2750,11 +2887,11 @@
                         e.target.value = config.hp === Infinity ? 999 : config.hp;
                         return;
                     }
-                    
+
                     const value = parseInt(e.target.value);
                     const newHP = value === 999 ? Infinity : value;
                     gameState.unitConfigs[type].hp = newHP;
-                    
+
                     // Update all existing pieces of this type
                     gameState.pieces.forEach(piece => {
                         if (piece.type === type && piece.alive) {
@@ -2763,18 +2900,19 @@
                             piece.hp = newHP;
                         }
                     });
-                    
+
                     // Update the display
                     renderPieces();
                     updateArmyDisplay();
                 }
             });
-            
+
             // Ram damage input handler
-            document.getElementById('unit-ram-damage').addEventListener('change', (e) => {
+            document.getElementById('unit-ram-damage').addEventListener('input', (e) => {
                 const type = document.getElementById('unit-details').dataset.type;
                 if (type) {
                     gameState.unitConfigs[type].ramDamage = parseInt(e.target.value);
+                    renderPieces();
                 }
             });
         }
@@ -2782,13 +2920,14 @@
         function selectTemplate(templateId) {
             const type = document.getElementById('unit-details').dataset.type;
             if (!type) return;
-            
+
             gameState.unitConfigs[type].template = templateId;
-            
+
             // Update UI
             document.querySelectorAll('.template-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.template === templateId);
             });
+            renderPieces();
         }
 
         // ============================================
@@ -2799,7 +2938,8 @@
             document.getElementById('param-actions').addEventListener('change', (e) => {
                 gameState.params.actionsPerTurn = parseInt(e.target.value);
                 gameState.actionsRemaining = gameState.params.actionsPerTurn;
-                document.getElementById('actions-count').textContent = gameState.actionsRemaining;
+                saveTurnSnapshot();
+                updateUI();
             });
         }
 
@@ -2813,11 +2953,12 @@
             gameState.isFirstTurn = true;
             // First player gets only 1 action on their first turn
             gameState.actionsRemaining = 1;
-            
+
             updatePins();
+            saveTurnSnapshot();
             updateUI();
             renderPieces();
-            
+
             addLog('=== GAME STARTED ===', 'system');
             addLog(`Player 1's Turn (1 action)`, 'system');
         }
@@ -2841,11 +2982,12 @@
             gameState.pathStartPiece = null;
             gameState.pinningPaths = [];
             gameState.pinningMap.clear();
-            
+
             document.getElementById('victory-modal').classList.remove('active');
             document.getElementById('game-log').innerHTML = '<div class="log-entry system">Game reset.</div>';
-            
+
             setupFixedPositions();
+            saveTurnSnapshot();
             exitRotationMode();
             cancelPathBuilding();
             clearHighlights();
@@ -2863,7 +3005,7 @@
         function setupKeyboard() {
             document.addEventListener('keydown', (e) => {
                 if (gameState.phase !== 'playing') return;
-                
+
                 // R for rotation mode
                 if (e.key === 'r' || e.key === 'R') {
                     if (gameState.selectedPiece !== null) {
@@ -2873,7 +3015,7 @@
                         }
                     }
                 }
-                
+
                 // Escape to cancel
                 if (e.key === 'Escape') {
                     if (gameState.rotationMode) {
@@ -2887,7 +3029,7 @@
                         renderPieces();
                     }
                 }
-                
+
                 // Number keys for ring selection in rotation mode
                 if (gameState.rotationMode && e.key >= '1' && e.key <= '5') {
                     const ring = parseInt(e.key);
@@ -2914,8 +3056,9 @@
             updateArmyDisplay();
             updateUI();
             startGame();
-            
+
             document.getElementById('btn-reset').addEventListener('click', resetGame);
+            document.getElementById('btn-reset-turn').addEventListener('click', resetTurn);
             document.getElementById('btn-end-turn').addEventListener('click', endTurn);
             document.getElementById('btn-new-game').addEventListener('click', resetGame);
             document.getElementById('btn-confirm-path').addEventListener('click', confirmPathMove);
@@ -2937,5 +3080,5 @@
         init();
     </script>
 </body>
-</html>
 
+</html>
