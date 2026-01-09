@@ -25,6 +25,8 @@
             --player1-dim: #8a3535;
             --player2: #4c8bc9;
             --player2-dim: #35628a;
+            --player-cpu: #a855f7;
+            --player-cpu-dim: #7c3aed;
             --throne: #d4af37;
             --pin-indicator: #ff6b6b;
             --valid-move: rgba(100, 200, 100, 0.3);
@@ -408,6 +410,17 @@
             background: #e8c34a;
         }
 
+        .btn.auto-move {
+            background: #a855f7;
+            color: white;
+            border-color: #9333ea;
+            font-weight: 500;
+        }
+
+        .btn.auto-move:hover {
+            background: #9333ea;
+        }
+
         .btn:disabled {
             opacity: 0.4;
             cursor: not-allowed;
@@ -724,6 +737,7 @@
         <div class="board-area">
             <svg id="game-board" width="700" height="700"></svg>
             <div class="action-controls" id="action-controls">
+                <button class="btn auto-move" id="btn-auto-move">✨ Auto-Move</button>
                 <button class="btn rotate" id="btn-rotate" style="display: none;">↻ Rotate Ring</button>
                 <button class="btn primary" id="btn-confirm-path" style="display: none;">Confirm Move</button>
             </div>
@@ -796,6 +810,19 @@
         </div>
     </div>
 
+    <!-- Game Mode Selection Modal -->
+    <div class="modal-overlay active" id="mode-selection-modal">
+        <div class="modal">
+            <h2>Select Game Mode</h2>
+            <p>Choose your opponent<br><span style="font-size: 14px; color: var(--text-color-secondary)">(CPU plays as
+                    Player 2)</span></p>
+            <div style="display: flex; gap: 16px; justify-content: center;">
+                <button class="btn primary" id="btn-mode-2p" style="padding: 16px 24px;">2 Player</button>
+                <button class="btn primary auto-move" id="btn-mode-cpu" style="padding: 16px 24px;">vs CPU</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // ============================================
         // THRONE - Tactical Hex Duel Prototype
@@ -827,7 +854,9 @@
 
         // Game state
         let gameState = {
-            phase: 'playing', // playing, ended
+            phase: 'setup', // setup, playing, ended
+            gameMode: '2player', // '2player' or 'vsCPU'
+            cpuPlayer: 2, // Which player is CPU (only used in vsCPU mode)
             currentPlayer: 1,
             actionsRemaining: 2,
             actionsPerTurn: 2,
@@ -1384,8 +1413,23 @@
                 circle.setAttribute('cx', x);
                 circle.setAttribute('cy', y);
                 circle.setAttribute('r', HEX_SIZE * 0.6);
-                circle.setAttribute('fill', piece.player === 1 ? '#c94c4c' : '#4c8bc9');
-                circle.setAttribute('stroke', piece.player === 1 ? '#8a3535' : '#35628a');
+
+                let fillColor, strokeColor;
+                if (piece.player === 1) {
+                    fillColor = '#c94c4c'; // var(--player1)
+                    strokeColor = '#8a3535'; // var(--player1-dim)
+                } else {
+                    if (gameState.gameMode === 'vsCPU' && piece.player === gameState.cpuPlayer) {
+                        fillColor = '#a855f7'; // var(--player-cpu)
+                        strokeColor = '#7c3aed'; // var(--player-cpu-dim)
+                    } else {
+                        fillColor = '#4c8bc9'; // var(--player2)
+                        strokeColor = '#35628a'; // var(--player2-dim)
+                    }
+                }
+
+                circle.setAttribute('fill', fillColor);
+                circle.setAttribute('stroke', strokeColor);
                 circle.setAttribute('stroke-width', 2);
                 g.appendChild(circle);
 
@@ -2342,6 +2386,7 @@
             gameState.hasAnyPieceMoved = true;
             gameState.actionsRemaining--;
             updateUI();
+            updateAutoMoveVisibility();
 
             if (gameState.actionsRemaining <= 0) {
                 endTurn();
@@ -2383,6 +2428,44 @@
             document.getElementById('btn-rotate').style.display = 'none';
 
             addLog(`--- Player ${gameState.currentPlayer}'s Turn ---`, 'system');
+
+            // Trigger CPU turn if applicable
+            if (gameState.gameMode === 'vsCPU' && gameState.currentPlayer === gameState.cpuPlayer) {
+                setTimeout(cpuTakeTurn, 800);
+            }
+        }
+
+        async function cpuTakeTurn() {
+            if (gameState.phase !== 'playing') return;
+            const myPlayer = gameState.cpuPlayer;
+
+            addLog('CPU thinking...', gameState.currentPlayer);
+
+            // Loop until no actions remaining or game ends
+            while (gameState.actionsRemaining > 0 && gameState.phase === 'playing') {
+                // SAFETY: Stop if it's no longer my turn (e.g. game reset, or turn ended externally)
+                if (gameState.currentPlayer !== myPlayer) return;
+
+                const thoughtTime = 600 + Math.random() * 400; // Random delay for realism
+                await new Promise(r => setTimeout(r, thoughtTime));
+
+                // SAFETY: Check again after await
+                if (gameState.currentPlayer !== myPlayer || gameState.phase !== 'playing') return;
+
+                // Execute best move
+                autoMove();
+
+                // Check if game ended during autoMove (e.g. invalid move causing issues, or win)
+                if (gameState.phase !== 'playing') break;
+            }
+
+            // End turn automatically - ONLY if it's still my turn
+            if (gameState.phase === 'playing' && gameState.currentPlayer === myPlayer) {
+                await new Promise(r => setTimeout(r, 600));
+                if (gameState.phase === 'playing' && gameState.currentPlayer === myPlayer) {
+                    endTurn();
+                }
+            }
         }
 
         function saveTurnSnapshot() {
@@ -2528,6 +2611,7 @@
             }
 
             updatePathVisualization();
+            updateAutoMoveVisibility();
         }
 
         function cancelPathBuilding() {
@@ -2540,6 +2624,7 @@
             document.getElementById('btn-rotate').style.display = 'none';
             document.getElementById('btn-confirm-path').style.display = 'none';
             document.getElementById('btn-cancel-path').style.display = 'none';
+            updateAutoMoveVisibility();
         }
 
         function updatePathVisualization() {
@@ -2723,6 +2808,7 @@
 
             document.getElementById('rotation-ring').textContent = '1';
             document.getElementById(`ring-1`).classList.add('active');
+            updateAutoMoveVisibility();
         }
 
         function exitRotationMode() {
@@ -2731,6 +2817,7 @@
             document.getElementById('rotation-controls').style.display = 'none';
             document.getElementById('action-controls').style.display = 'flex';
             document.querySelectorAll('.ring-highlight').forEach(el => el.classList.remove('active'));
+            updateAutoMoveVisibility();
         }
 
         // ============================================
@@ -2739,24 +2826,48 @@
 
         function updateUI() {
             const indicator = document.getElementById('turn-indicator');
+            const nameEl = indicator.querySelector('.player-name');
+
             indicator.className = `turn-indicator player${gameState.currentPlayer}`;
-            indicator.querySelector('.player-name').textContent = `Player ${gameState.currentPlayer}`;
+            nameEl.textContent = `Player ${gameState.currentPlayer}`;
+
+            // CPU overrides
+            if (gameState.gameMode === 'vsCPU' && gameState.currentPlayer === gameState.cpuPlayer) {
+                nameEl.textContent = 'CPU (Thinking...)';
+                nameEl.style.color = 'var(--player-cpu)';
+                indicator.style.borderColor = 'var(--player-cpu)';
+            } else {
+                nameEl.style.color = '';
+                indicator.style.borderColor = '';
+            }
+
             document.getElementById('actions-count').textContent = gameState.actionsRemaining;
 
+            const isCpuTurn = gameState.gameMode === 'vsCPU' && gameState.currentPlayer === gameState.cpuPlayer;
+            const canInteract = gameState.phase === 'playing' && !isCpuTurn;
 
-
-            document.getElementById('btn-end-turn').disabled = gameState.phase !== 'playing';
+            document.getElementById('btn-end-turn').disabled = !canInteract;
 
             // Reset Turn button enablement
             const resetTurnBtn = document.getElementById('btn-reset-turn');
             if (resetTurnBtn) {
                 const totalActionsForTurn = gameState.isFirstTurn ? 1 : gameState.params.actionsPerTurn;
-                resetTurnBtn.disabled = gameState.phase !== 'playing' || gameState.actionsRemaining >= totalActionsForTurn;
+                resetTurnBtn.disabled = !canInteract || gameState.actionsRemaining >= totalActionsForTurn;
             }
         }
 
 
         function updateArmyDisplay() {
+            // Update titles
+            const p2Title = document.querySelector('.army-title.player2');
+            if (gameState.gameMode === 'vsCPU') {
+                p2Title.textContent = '⬢ CPU Army';
+                p2Title.style.color = 'var(--player-cpu)';
+            } else {
+                p2Title.textContent = '⬢ Player 2 Army';
+                p2Title.style.color = 'var(--player2)';
+            }
+
             [1, 2].forEach(player => {
                 const container = document.getElementById(`army-p${player}`);
                 container.innerHTML = '';
@@ -2764,6 +2875,11 @@
                 gameState.pieces.filter(p => p.player === player).forEach((piece, idx) => {
                     const div = document.createElement('div');
                     div.className = `army-piece player${player}`;
+
+                    if (gameState.gameMode === 'vsCPU' && player === gameState.cpuPlayer) {
+                        div.style.background = 'var(--player-cpu-dim)';
+                    }
+
                     if (!piece.alive) div.classList.add('dead');
                     if (piece.pinned) div.classList.add('pinned');
                     div.textContent = PIECE_TYPES[piece.type].symbol;
@@ -2947,28 +3063,16 @@
         // GAME CONTROLS
         // ============================================
 
-        function startGame() {
+        function startGame(mode = '2player') {
+            gameState.gameMode = mode;
             gameState.phase = 'playing';
             gameState.currentPlayer = 1;
             gameState.isFirstTurn = true;
             // First player gets only 1 action on their first turn
             gameState.actionsRemaining = 1;
-
-            updatePins();
-            saveTurnSnapshot();
-            updateUI();
-            renderPieces();
-
-            addLog('=== GAME STARTED ===', 'system');
-            addLog(`Player 1's Turn (1 action)`, 'system');
-        }
-
-        function resetGame() {
-            gameState.phase = 'playing';
-            gameState.currentPlayer = 1;
-            gameState.isFirstTurn = true;
-            gameState.actionsRemaining = 1; // First player gets 1 action
             gameState.actionsPerTurn = gameState.params.actionsPerTurn;
+
+            // Reset state
             gameState.usedPieces = new Set();
             gameState.hasAnyPieceMoved = false;
             gameState.pieces = [];
@@ -2983,19 +3087,520 @@
             gameState.pinningPaths = [];
             gameState.pinningMap.clear();
 
+            // Hide modals
             document.getElementById('victory-modal').classList.remove('active');
-            document.getElementById('game-log').innerHTML = '<div class="log-entry system">Game reset.</div>';
+            document.getElementById('mode-selection-modal').classList.remove('active');
 
+            // Setup board
             setupFixedPositions();
             saveTurnSnapshot();
-            exitRotationMode();
-            cancelPathBuilding();
-            clearHighlights();
-            renderPieces();
+            updatePins();
             updateUI();
+            renderPieces();
             updateArmyDisplay();
+
             addLog('=== GAME STARTED ===', 'system');
-            addLog(`Player 1's Turn`, 'system');
+            addLog(`Mode: ${mode === 'vsCPU' ? 'vs CPU' : '2 Player'}`, 'system');
+            addLog(`Player 1's Turn (1 action)`, 'system');
+        }
+
+        function resetGame() {
+            // Just show mode selection
+            document.getElementById('victory-modal').classList.remove('active');
+            document.getElementById('mode-selection-modal').classList.add('active');
+            gameState.phase = 'setup';
+            document.getElementById('game-log').innerHTML = '<div class="log-entry system">Game reset.</div>';
+        }
+
+        // ============================================
+        // AUTO-MOVE AI
+        // ============================================
+
+        function pieceValue(piece) {
+            if (!piece || !piece.alive) return 0;
+            const config = gameState.unitConfigs[piece.type];
+            if (PIECE_TYPES[piece.type].isKing) return 9999; // King is priceless
+            return piece.hp + config.ramDamage + config.range;
+        }
+
+        function countNonKingPieces(player) {
+            return gameState.pieces.filter(p =>
+                p.player === player && p.alive && !PIECE_TYPES[p.type].isKing
+            ).length;
+        }
+
+        function evaluateMove(pieceIndex, destination, path) {
+            const piece = gameState.pieces[pieceIndex];
+            const config = gameState.unitConfigs[piece.type];
+            const occupant = getPieceAt(destination.q, destination.r);
+            let score = 0;
+
+            // Build move object for validation (same structure as confirmPathMove)
+            const damagePath = calculateDamagePath(piece, path);
+            const move = {
+                q: destination.q,
+                r: destination.r,
+                damagePath: damagePath,
+                willKill: occupant && occupant.player !== piece.player,
+                path: path
+            };
+
+            // VALIDATION: Use the same validation as executeMove
+            const ramDamage = config.ramDamage;
+            if (!simulateMoveAndValidate(pieceIndex, destination.q, destination.r, move, ramDamage)) {
+                return -Infinity; // Invalid move
+            }
+
+            // Win condition: King to throne
+            if (PIECE_TYPES[piece.type].isKing && destination.q === 0 && destination.r === 0) {
+                return Infinity;
+            }
+
+            // Win condition: Capture enemy King
+            if (occupant && occupant.player !== piece.player && PIECE_TYPES[occupant.type].isKing) {
+                return Infinity;
+            }
+
+            // Win condition: Eliminate last non-King piece
+            if (occupant && occupant.player !== piece.player && !PIECE_TYPES[occupant.type].isKing) {
+                if (countNonKingPieces(occupant.player) === 1) {
+                    return Infinity;
+                }
+            }
+
+            // Capture enemy piece
+            if (occupant && occupant.player !== piece.player) {
+                score += 500 + pieceValue(occupant);
+            }
+
+            // Calculate damage along path (reuse damagePath from validation)
+            damagePath.forEach(pos => {
+                const target = getPieceAt(pos.q, pos.r);
+                if (target && target.player !== piece.player && target !== occupant) {
+                    const damageDealt = config.ramDamage;
+                    const percentDamage = damageDealt / target.hp;
+                    score += 100 + percentDamage * pieceValue(target);
+                }
+            });
+
+            // Move toward throne (lower ring = better)
+            const currentRing = getRing(piece.q, piece.r);
+            const newRing = getRing(destination.q, destination.r);
+            if (newRing < currentRing) {
+                let throneBonus = 30 * (currentRing - newRing);
+                // King gets extra incentive to move toward throne
+                if (PIECE_TYPES[piece.type].isKing) {
+                    throneBonus *= 2; // King is 2x more motivated to approach throne
+                }
+                score += throneBonus;
+            }
+
+            // Penalty: Moving into danger (simple check)
+            const enemyPieces = gameState.pieces.filter(p =>
+                p.player !== piece.player && p.alive && !p.pinned
+            );
+            for (const enemy of enemyPieces) {
+                if (hexDistance(destination.q, destination.r, enemy.q, enemy.r) <= 1) {
+                    if (PIECE_TYPES[piece.type].isKing) {
+                        score -= 300; // King in danger is very bad
+                    } else {
+                        score -= 100;
+                    }
+                }
+            }
+
+            return score;
+        }
+
+        function getBestMoveForPiece(pieceIndex) {
+            const piece = gameState.pieces[pieceIndex];
+            const config = gameState.unitConfigs[piece.type];
+            let bestScore = -Infinity;
+            let bestPath = null;
+
+            // Get all valid first steps
+            const firstSteps = getValidNextSteps(piece, []);
+
+            for (const step of firstSteps) {
+                // Skip if this step has a friendly piece - cannot end on friendly
+                if (step.hasFriendly) continue;
+
+                // Simple 1-step evaluation
+                const path = [{ q: step.q, r: step.r }];
+                const score = evaluateMove(pieceIndex, step, path);
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestPath = path;
+                }
+
+                // For multi-range pieces, try extending the path
+                if (config.range > 1) {
+                    const nextSteps = getValidNextSteps(piece, path);
+                    for (const step2 of nextSteps) {
+                        // Skip if final destination has a friendly piece
+                        if (step2.hasFriendly) continue;
+
+                        const path2 = [...path, { q: step2.q, r: step2.r }];
+                        const score2 = evaluateMove(pieceIndex, step2, path2);
+                        if (score2 > bestScore) {
+                            bestScore = score2;
+                            bestPath = path2;
+                        }
+                    }
+                }
+            }
+
+            return { score: bestScore, path: bestPath };
+        }
+
+        // Evaluate a rotation action
+        function evaluateRotation(ring, clockwise) {
+            // Save current state (including current pin counts)
+            const savedPieces = JSON.parse(JSON.stringify(gameState.pieces));
+            const savedPinningPaths = [...gameState.pinningPaths];
+            const savedPinningMap = new Map(gameState.pinningMap);
+
+            // Count enemy pins BEFORE rotation
+            const currentPlayer = gameState.currentPlayer;
+            let enemyPinsBefore = 0;
+            gameState.pieces.forEach(piece => {
+                if (piece.alive && piece.player !== currentPlayer && piece.pinned) {
+                    enemyPinsBefore++;
+                }
+            });
+
+            // Simulate rotation
+            const piecesInRing = gameState.pieces.filter(p =>
+                p.alive && getRing(p.q, p.r) === ring
+            );
+
+            piecesInRing.forEach(piece => {
+                const rotated = rotateHexAroundCenter(piece.q, piece.r, clockwise ? 1 : -1);
+                piece.q = rotated.q;
+                piece.r = rotated.r;
+            });
+
+            updatePins();
+
+            // Score the resulting position - ONLY count meaningful changes
+            let score = 0;
+            let enemyPinsAfter = 0;
+            let friendlyPinsAfter = 0;
+
+            gameState.pieces.forEach(piece => {
+                if (!piece.alive) return;
+                const value = piece.hp + gameState.unitConfigs[piece.type].ramDamage;
+
+                if (piece.player === currentPlayer) {
+                    if (piece.pinned) {
+                        score -= value * 0.5; // Bad: we got pinned
+                        friendlyPinsAfter++;
+                    }
+                } else {
+                    if (piece.pinned) {
+                        enemyPinsAfter++;
+                        score += value * 2; // Good: enemy pinned
+
+                        if (PIECE_TYPES[piece.type].isKing) {
+                            score += 500; // Enemy King pinned is huge
+                        }
+                    }
+                }
+            });
+
+            // Restore original state
+            gameState.pieces = JSON.parse(JSON.stringify(savedPieces));
+            gameState.pinningPaths = savedPinningPaths;
+            gameState.pinningMap = savedPinningMap;
+            updatePins();
+
+            // Only return positive score if rotation CREATES new pins
+            // or significantly improves position
+            const newPinsCreated = enemyPinsAfter > enemyPinsBefore;
+            const gotOurPiecesPinned = friendlyPinsAfter > 0;
+
+            if (!newPinsCreated && !gotOurPiecesPinned) {
+                // Rotation achieved nothing meaningful - don't recommend it
+                return -Infinity;
+            }
+
+            return score;
+        }
+
+        // Find best rotation option (if King is available)
+        function getBestRotation(kingIndex) {
+            const king = gameState.pieces[kingIndex];
+            if (!king || !king.alive || king.pinned || gameState.usedPieces.has(kingIndex)) {
+                return { score: -Infinity, ring: null, clockwise: null };
+            }
+
+            let bestScore = -Infinity;
+            let bestRing = null;
+            let bestClockwise = null;
+
+            // Evaluate all 5 rings × 2 directions
+            for (let ring = 1; ring <= 5; ring++) {
+                for (const clockwise of [true, false]) {
+                    const score = evaluateRotation(ring, clockwise);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestRing = ring;
+                        bestClockwise = clockwise;
+                    }
+                }
+            }
+
+            return { score: bestScore, ring: bestRing, clockwise: bestClockwise };
+        }
+
+        // Simulate rotation and find the best second action score
+        function evaluateRotationLookahead(kingIndex, ring, clockwise) {
+            // Save current state
+            const savedPieces = JSON.parse(JSON.stringify(gameState.pieces));
+            const savedUsedPieces = new Set(gameState.usedPieces);
+            const savedPinningPaths = [...gameState.pinningPaths];
+            const savedPinningMap = new Map(gameState.pinningMap);
+
+            // Simulate rotation
+            const piecesInRing = gameState.pieces.filter(p =>
+                p.alive && getRing(p.q, p.r) === ring
+            );
+
+            piecesInRing.forEach(piece => {
+                const rotated = rotateHexAroundCenter(piece.q, piece.r, clockwise ? 1 : -1);
+                piece.q = rotated.q;
+                piece.r = rotated.r;
+            });
+
+            // Mark king as used
+            gameState.usedPieces.add(kingIndex);
+
+            // Update pins for simulated state
+            updatePins();
+
+            // Find best second move
+            let bestSecondScore = -Infinity;
+            gameState.pieces.forEach((p, idx) => {
+                if (p.player === gameState.currentPlayer &&
+                    p.alive &&
+                    !p.pinned &&
+                    !gameState.usedPieces.has(idx)) {
+                    const result = getBestMoveForPiece(idx);
+                    if (result.score > bestSecondScore) {
+                        bestSecondScore = result.score;
+                    }
+                }
+            });
+
+            // Restore original state
+            gameState.pieces = JSON.parse(JSON.stringify(savedPieces));
+            gameState.usedPieces = savedUsedPieces;
+            gameState.pinningPaths = savedPinningPaths;
+            gameState.pinningMap = savedPinningMap;
+            updatePins();
+
+            return bestSecondScore === -Infinity ? 0 : bestSecondScore;
+        }
+
+        // Simulate a move and find the best second action score
+        function evaluateLookahead(pieceIndex, path) {
+            const piece = gameState.pieces[pieceIndex];
+            const destination = path[path.length - 1];
+
+            // Save current state
+            const savedPieces = JSON.parse(JSON.stringify(gameState.pieces));
+            const savedUsedPieces = new Set(gameState.usedPieces);
+            const savedPinningPaths = [...gameState.pinningPaths];
+            const savedPinningMap = new Map(gameState.pinningMap);
+
+            // Simulate the move
+            const damagePath = calculateDamagePath(piece, path);
+            const occupant = getPieceAt(destination.q, destination.r);
+            const config = gameState.unitConfigs[piece.type];
+
+            // Apply damage along path
+            damagePath.forEach(pos => {
+                if (pos.q === destination.q && pos.r === destination.r) return;
+                const target = getPieceAt(pos.q, pos.r);
+                if (target && target.player !== piece.player) {
+                    if (target.pinned || target.hp <= config.ramDamage) {
+                        target.alive = false;
+                    } else {
+                        target.hp -= config.ramDamage;
+                    }
+                }
+            });
+
+            // Kill destination if enemy
+            if (occupant && occupant.player !== piece.player) {
+                occupant.alive = false;
+            }
+
+            // Move the piece
+            piece.q = destination.q;
+            piece.r = destination.r;
+
+            // Mark piece as used
+            gameState.usedPieces.add(pieceIndex);
+
+            // Update pins for simulated state
+            updatePins();
+
+            // Find best second move
+            let bestSecondScore = -Infinity;
+            gameState.pieces.forEach((p, idx) => {
+                if (p.player === gameState.currentPlayer &&
+                    p.alive &&
+                    !p.pinned &&
+                    !gameState.usedPieces.has(idx)) {
+                    const result = getBestMoveForPiece(idx);
+                    if (result.score > bestSecondScore) {
+                        bestSecondScore = result.score;
+                    }
+                }
+            });
+
+            // Restore original state
+            gameState.pieces = JSON.parse(JSON.stringify(savedPieces));
+            gameState.usedPieces = savedUsedPieces;
+            gameState.pinningPaths = savedPinningPaths;
+            gameState.pinningMap = savedPinningMap;
+            updatePins();
+
+            return bestSecondScore === -Infinity ? 0 : bestSecondScore;
+        }
+
+        function autoMove() {
+            if (gameState.phase !== 'playing') return;
+
+            // Cleanup any active UI modes to prevent state conflicts
+            if (gameState.rotationMode) {
+                exitRotationMode();
+            }
+            if (gameState.pathBuilding || gameState.selectedPiece !== null) {
+                cancelPathBuilding(); // This also clears selectedPiece
+                // Ensure double-check cleanup
+                gameState.selectedPiece = null;
+                gameState.validMoves = [];
+                clearHighlights();
+                renderPieces();
+            }
+
+            // Get all movable pieces for current player
+            const movablePieces = [];
+            let kingIndex = null;
+            gameState.pieces.forEach((piece, index) => {
+                if (piece.player === gameState.currentPlayer &&
+                    piece.alive &&
+                    !piece.pinned &&
+                    !gameState.usedPieces.has(index)) {
+                    movablePieces.push(index);
+                    if (PIECE_TYPES[piece.type].isKing) {
+                        kingIndex = index;
+                    }
+                }
+            });
+
+            if (movablePieces.length === 0) {
+                addLog('No available moves!', 'system');
+                return;
+            }
+
+            // Check if we have 2+ actions remaining for lookahead
+            const canLookahead = gameState.actionsRemaining >= 2;
+
+            // Find best movement option
+            let bestMoveScore = -Infinity;
+            let bestPieceIndex = null;
+            let bestPath = null;
+
+            for (const pieceIndex of movablePieces) {
+                const result = getBestMoveForPiece(pieceIndex);
+                if (!result.path) continue;
+
+                let totalScore = result.score;
+
+                // If we have 2+ actions, simulate this move and find best second move
+                if (canLookahead && result.score !== Infinity) {
+                    const lookaheadBonus = evaluateLookahead(pieceIndex, result.path);
+                    totalScore += lookaheadBonus * 0.9;
+                }
+
+                if (totalScore > bestMoveScore) {
+                    bestMoveScore = totalScore;
+                    bestPieceIndex = pieceIndex;
+                    bestPath = result.path;
+                }
+            }
+
+            // Find best rotation option (if King is available)
+            let bestRotation = { score: -Infinity, ring: null, clockwise: null };
+            let rotationTotalScore = -Infinity;
+            if (kingIndex !== null) {
+                bestRotation = getBestRotation(kingIndex);
+
+                if (bestRotation.ring !== null) {
+                    rotationTotalScore = bestRotation.score;
+
+                    // Apply lookahead for rotation too
+                    if (canLookahead && bestRotation.score !== Infinity) {
+                        const lookaheadBonus = evaluateRotationLookahead(kingIndex, bestRotation.ring, bestRotation.clockwise);
+                        rotationTotalScore += lookaheadBonus * 0.9;
+                    }
+                }
+            }
+
+            // Decide: rotation or movement?
+            const useRotation = rotationTotalScore > bestMoveScore && bestRotation.ring !== null;
+
+            if (useRotation) {
+                // Execute rotation
+                addLog(`Auto-move: King rotates ring ${bestRotation.ring} ${bestRotation.clockwise ? 'CW' : 'CCW'}`, gameState.currentPlayer);
+                executeRotation(bestRotation.ring, bestRotation.clockwise);
+                useAction(kingIndex);
+                updateArmyDisplay();
+                clearHighlights();
+                renderPieces();
+            } else if (bestPieceIndex !== null && bestPath && bestPath.length > 0) {
+                // Execute movement
+                const piece = gameState.pieces[bestPieceIndex];
+                const destination = bestPath[bestPath.length - 1];
+                const damagePath = calculateDamagePath(piece, bestPath);
+                const occupant = getPieceAt(destination.q, destination.r);
+
+                const move = {
+                    q: destination.q,
+                    r: destination.r,
+                    damagePath: damagePath,
+                    willKill: occupant && occupant.player !== piece.player,
+                    path: bestPath
+                };
+
+                addLog(`Auto-move: ${PIECE_TYPES[piece.type].name} to (${destination.q}, ${destination.r})`, gameState.currentPlayer);
+
+                const moveSucceeded = executeMove(bestPieceIndex, destination.q, destination.r, move);
+
+                if (moveSucceeded) {
+                    useAction(bestPieceIndex);
+                    updateArmyDisplay();
+                    clearHighlights();
+                    renderPieces();
+                }
+            } else {
+                addLog('Could not find a good move!', 'system');
+            }
+        }
+
+        function updateAutoMoveVisibility() {
+            const btn = document.getElementById('btn-auto-move');
+            if (!btn) return;
+
+            const isCpuTurn = gameState.gameMode === 'vsCPU' && gameState.currentPlayer === gameState.cpuPlayer;
+
+            const shouldShow = gameState.phase === 'playing' && !isCpuTurn;
+
+            btn.style.display = shouldShow ? 'inline-block' : 'none';
         }
 
         // ============================================
@@ -3055,7 +3660,7 @@
             setupFixedPositions();
             updateArmyDisplay();
             updateUI();
-            startGame();
+            // startGame(); // Removed auto-start
 
             document.getElementById('btn-reset').addEventListener('click', resetGame);
             document.getElementById('btn-reset-turn').addEventListener('click', resetTurn);
@@ -3074,6 +3679,13 @@
                     }
                 }
             });
+
+            document.getElementById('btn-auto-move').addEventListener('click', autoMove);
+            updateAutoMoveVisibility();
+
+            // Mode selection listeners
+            document.getElementById('btn-mode-2p').addEventListener('click', () => startGame('2player'));
+            document.getElementById('btn-mode-cpu').addEventListener('click', () => startGame('vsCPU'));
         }
 
         // Start
