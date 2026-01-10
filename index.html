@@ -2013,37 +2013,36 @@
                     const ally2 = allies[j];
 
                     // Find all valid paths between these allies
+                    // findValidPinningPaths already validates paths (zig-zag rule, enemies only)
                     const paths = findValidPinningPaths(ally1, ally2);
 
-                    // For each path, check if enemies exist at every cell (excluding endpoints)
+                    // All returned paths are already validated, so use them directly
                     paths.forEach(path => {
-                        if (isPathPinned(path, enemies)) {
-                            // Store this pinning path for visualization (with player info)
-                            gameState.pinningPaths.push({ path: path, player: activePlayer });
+                        // Store this pinning path for visualization (with player info)
+                        gameState.pinningPaths.push({ path: path, player: activePlayer });
 
-                            // Find the indices of the pinning allies
-                            const ally1Index = gameState.pieces.findIndex(p => p === ally1);
-                            const ally2Index = gameState.pieces.findIndex(p => p === ally2);
+                        // Find the indices of the pinning allies
+                        const ally1Index = gameState.pieces.findIndex(p => p === ally1);
+                        const ally2Index = gameState.pieces.findIndex(p => p === ally2);
 
-                            // Mark all enemies on this path as pinned and track which allies are pinning them
-                            path.forEach(step => {
-                                if (step.q === ally1.q && step.r === ally1.r) return;
-                                if (step.q === ally2.q && step.r === ally2.r) return;
+                        // Mark all enemies on this path as pinned and track which allies are pinning them
+                        path.forEach(step => {
+                            if (step.q === ally1.q && step.r === ally1.r) return;
+                            if (step.q === ally2.q && step.r === ally2.r) return;
 
-                                const enemy = getPieceAt(step.q, step.r);
-                                if (enemy && enemy.player !== activePlayer && enemy.alive) {
-                                    enemy.pinned = true;
+                            const enemy = getPieceAt(step.q, step.r);
+                            if (enemy && enemy.player !== activePlayer && enemy.alive) {
+                                enemy.pinned = true;
 
-                                    // Track which allies are pinning this enemy
-                                    const enemyIndex = gameState.pieces.findIndex(p => p === enemy);
-                                    if (!gameState.pinningMap.has(enemyIndex)) {
-                                        gameState.pinningMap.set(enemyIndex, new Set());
-                                    }
-                                    gameState.pinningMap.get(enemyIndex).add(ally1Index);
-                                    gameState.pinningMap.get(enemyIndex).add(ally2Index);
+                                // Track which allies are pinning this enemy
+                                const enemyIndex = gameState.pieces.findIndex(p => p === enemy);
+                                if (!gameState.pinningMap.has(enemyIndex)) {
+                                    gameState.pinningMap.set(enemyIndex, new Set());
                                 }
-                            });
-                        }
+                                gameState.pinningMap.get(enemyIndex).add(ally1Index);
+                                gameState.pinningMap.get(enemyIndex).add(ally2Index);
+                            }
+                        });
                     });
                 }
             }
@@ -2101,177 +2100,133 @@
             });
         }
 
+        // Get relative direction from entry direction
+        // Returns: { straight, left, right } as direction indices
+        // When entering from entryDir, valid exits are:
+        // - Straight: opposite side (entryDir + 3) % 6
+        // - Left: one step counterclockwise from straight: (straight + 1) % 6 = (entryDir + 4) % 6
+        // - Right: one step clockwise from straight: (straight - 1 + 6) % 6 = (entryDir + 2) % 6
+        function getRelativeDirections(entryDir) {
+            const straight = (entryDir + 3) % 6; // Opposite
+            const left = (entryDir + 4) % 6;     // One step left (counterclockwise) of straight
+            const right = (entryDir + 2) % 6;    // One step right (clockwise) of straight
+            return { straight, left, right };
+        }
+
+        // Determine turn direction: 'straight', 'left', or 'right'
+        function getTurnDirection(entryDir, exitDir) {
+            const rel = getRelativeDirections(entryDir);
+            if (exitDir === rel.straight) return 'straight';
+            if (exitDir === rel.left) return 'left';
+            if (exitDir === rel.right) return 'right';
+            return null; // Invalid (backward or sideways)
+        }
+
+        // Update lean state based on turn
+        // lean: 'none' | 'left' | 'right'
+        // turn: 'straight' | 'left' | 'right'
+        function updateLean(lean, turn) {
+            if (turn === 'straight') return lean; // Straight doesn't change lean
+            if (turn === 'left') {
+                if (lean === 'left') return null; // Can't turn left twice
+                return 'left'; // Now leaning left
+            }
+            if (turn === 'right') {
+                if (lean === 'right') return null; // Can't turn right twice
+                return 'right'; // Now leaning right
+            }
+            return null;
+        }
+
         function findValidPinningPaths(start, end) {
             const paths = [];
-            const startRing = getRing(start.q, start.r);
-            const endRing = getRing(end.q, end.r);
+            const activePlayer = gameState.currentPlayer;
+            const enemies = gameState.pieces.filter(p => 
+                p.alive && p.player !== activePlayer
+            );
 
-            // Try strictly monotonic paths (no throne)
-            if (startRing < endRing) {
-                // Strictly increasing
-                findMonotonicPath(start.q, start.r, end.q, end.r, startRing, endRing, true, []);
-            } else if (startRing > endRing) {
-                // Strictly decreasing
-                findMonotonicPath(start.q, start.r, end.q, end.r, startRing, endRing, false, []);
+            // Verify that start and end are both allies of the active player
+            const startPiece = getPieceAt(start.q, start.r);
+            const endPiece = getPieceAt(end.q, end.r);
+            if (!startPiece || !startPiece.alive || startPiece.player !== activePlayer) return paths;
+            if (!endPiece || !endPiece.alive || endPiece.player !== activePlayer) return paths;
+
+            // Try all possible starting directions from start hex
+            for (let startDir = 0; startDir < 6; startDir++) {
+                const neighbor = hexNeighbor(start.q, start.r, startDir);
+                if (!isValidHex(neighbor.q, neighbor.r)) continue;
+
+                // Check if first step has an enemy (path must travel through enemies)
+                const firstStepPiece = getPieceAt(neighbor.q, neighbor.r);
+                if (!firstStepPiece || !firstStepPiece.alive || firstStepPiece.player === activePlayer) {
+                    continue; // Must start with an enemy
+                }
+
+                // When we move from start to neighbor in direction startDir,
+                // the neighbor sees us entering from the opposite direction: (startDir + 3) % 6
+                const entryDirForNeighbor = (startDir + 3) % 6;
+
+                // Start pathfinding with entry direction from neighbor's perspective
+                findPathWithRules(
+                    neighbor.q, neighbor.r,
+                    entryDirForNeighbor,
+                    end.q, end.r,
+                    [{ q: start.q, r: start.r }, { q: neighbor.q, r: neighbor.r }],
+                    'none' // Initial lean state
+                );
             }
 
-            // Try paths that go through throne (allows direction reversal)
-            // Determine initial direction based on start and target
-            // We can start increasing or decreasing, then reverse at throne
-            if (startRing !== endRing) {
-                // Try starting decreasing, then reverse to increasing
-                // This allows paths like: ring 1 -> throne -> ring 1 -> ring 2
-                if (endRing > startRing) {
-                    findPathThroughThrone(start.q, start.r, end.q, end.r, startRing, endRing, false, true, [], undefined);
-                }
-                // Try starting decreasing, then exit throne (for cases like ring 2 -> throne -> ring 1)
-                if (endRing < startRing) {
-                    // When going from higher ring to lower ring through throne:
-                    // Decrease to throne (2 -> 1 -> 0), exit opposite to ring 1, target at ring 1
-                    // So: beforeIncreasing=false (decreasing), afterIncreasing=true (but we exit to target ring, so it doesn't matter)
-                    findPathThroughThrone(start.q, start.r, end.q, end.r, startRing, endRing, false, true, [], undefined);
-                    // Also try the reverse: might need to go through throne differently
-                    // Actually, for endRing < startRing, we always need to decrease to throne, so only one path needed
-                }
-            } else {
-                // Same ring - must use throne to create valid path
-                // Start decreasing to throne, then reverse to increasing
-                if (startRing > 0) {
-                    findPathThroughThrone(start.q, start.r, end.q, end.r, startRing, endRing, false, true, [], undefined);
-                }
-            }
-
-            function findMonotonicPath(q, r, targetQ, targetR, currentRing, targetRing, increasing, path) {
+            function findPathWithRules(q, r, entryDir, targetQ, targetR, path, lean) {
                 const currentPath = [...path, { q, r }];
 
-                // Reached target
-                if (q === targetQ && r === targetR) {
-                    paths.push(currentPath);
-                    return;
-                }
+                // Limit path length to prevent infinite loops
+                if (currentPath.length >= 20) return;
 
-                // Limit path length
-                if (currentPath.length >= 15) return;
+                // Get valid exit directions (relative to entry)
+                const rel = getRelativeDirections(entryDir);
+                const validExits = [rel.straight, rel.left, rel.right];
 
-                for (let dir = 0; dir < 6; dir++) {
-                    const neighbor = hexNeighbor(q, r, dir);
+                // Try each valid exit direction
+                for (const exitDir of validExits) {
+                    const neighbor = hexNeighbor(q, r, exitDir);
                     if (!isValidHex(neighbor.q, neighbor.r)) continue;
 
-                    const neighborRing = getRing(neighbor.q, neighbor.r);
-
-                    // Check if already in path
+                    // Check if already in path (no backtracking)
                     if (currentPath.some(step => step.q === neighbor.q && step.r === neighbor.r)) continue;
 
-                    // Must be strictly monotonic
-                    if (increasing) {
-                        if (neighborRing <= currentRing || neighborRing > targetRing) continue;
-                    } else {
-                        if (neighborRing >= currentRing || neighborRing < targetRing) continue;
-                    }
+                    // Determine turn direction
+                    const turn = getTurnDirection(entryDir, exitDir);
+                    if (turn === null) continue; // Invalid direction
 
-                    findMonotonicPath(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, increasing, currentPath);
-                }
-            }
+                    // Update lean state
+                    const newLean = updateLean(lean, turn);
+                    if (newLean === null) continue; // Violates zig-zag rule
 
-            function findPathThroughThrone(q, r, targetQ, targetR, currentRing, targetRing, beforeIncreasing, afterIncreasing, path, throneEntryDir) {
-                const currentPath = [...path, { q, r }];
-
-                // Reached target
-                if (q === targetQ && r === targetR && currentPath.length > 1) {
-                    paths.push(currentPath);
-                    return;
-                }
-
-                // Limit path length
-                if (currentPath.length >= 15) return;
-
-                const isBeforeThrone = throneEntryDir === undefined && currentRing !== 0;
-                const isAtThrone = currentRing === 0;
-                const isAfterThrone = throneEntryDir !== undefined && currentRing !== 0;
-
-                for (let dir = 0; dir < 6; dir++) {
-                    const neighbor = hexNeighbor(q, r, dir);
-                    if (!isValidHex(neighbor.q, neighbor.r)) continue;
-
-                    const neighborRing = getRing(neighbor.q, neighbor.r);
-
-                    // Check if already in path
-                    if (currentPath.some(step => step.q === neighbor.q && step.r === neighbor.r)) continue;
-
-                    if (isBeforeThrone) {
-                        // Before throne - follow initial direction toward throne
-                        const increasing = beforeIncreasing;
-                        if (increasing) {
-                            if (neighborRing <= currentRing) continue; // Must increase
-                        } else {
-                            if (neighborRing >= currentRing) continue; // Must decrease
-                        }
-
-                        if (neighborRing === 0) {
-                            // Entering throne - remember entry direction
-                            // When we move from current cell to throne in direction 'dir',
-                            // the throne sees us entering from direction (dir + 3) % 6
-                            const entryDir = (dir + 3) % 6;
-                            findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, 0, targetRing, beforeIncreasing, afterIncreasing, currentPath, entryDir);
-                        } else {
-                            // Continue toward throne
-                            findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, beforeIncreasing, afterIncreasing, currentPath, undefined);
-                        }
-                    } else if (isAtThrone) {
-                        // At throne - must exit opposite direction
-                        if (neighborRing === 0) continue; // Can't stay at throne
-                        // Check if exit direction is opposite to entry direction
-                        // throneEntryDir is the direction FROM which we entered (from throne's perspective)
-                        // dir is the direction we're going TO exit
-                        // They should be opposite: exit should be (throneEntryDir + 3) % 6
-                        const requiredExitDir = (throneEntryDir + 3) % 6;
-                        if (dir !== requiredExitDir) continue; // Must exit opposite to entry
-
-                        // Check if we're exiting directly to the target
-                        // (This will also be checked at the start of the recursive call, but being explicit here)
-                        if (neighbor.q === targetQ && neighbor.r === targetR) {
-                            // Exiting directly to target - path is complete
-                            const finalPath = [...currentPath, { q: neighbor.q, r: neighbor.r }];
+                    // Check if this neighbor is the target (must check before checking occupant)
+                    if (neighbor.q === targetQ && neighbor.r === targetR) {
+                        // Reached target! Create final path and validate
+                        const finalPath = [...currentPath, { q: neighbor.q, r: neighbor.r }];
+                        if (isPathValidForPinning(finalPath, activePlayer, enemies)) {
                             paths.push(finalPath);
-                            continue;
                         }
-
-                        // After throne, follow reversed direction
-                        findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, beforeIncreasing, afterIncreasing, currentPath, throneEntryDir);
-                    } else if (isAfterThrone) {
-                        // After throne - follow final direction toward target
-                        // Special case: if we just exited to ring 1 and target is also at ring 1,
-                        // we can only end at the exact exit cell (opposite of entry), not other ring 1 cells
-                        if (currentRing === targetRing && currentRing === 1) {
-                            // We're at ring 1 after exiting throne
-                            // First check if we're already at the target (should be caught by "Reached target" at start, but double-check)
-                            if (q === targetQ && r === targetR) {
-                                // We're at the target - path should already be added by "Reached target" check
-                                // But continue to check neighbors just in case
-                            }
-                            // Check if neighbor is the target - if so, allow it
-                            if (neighborRing === 1) {
-                                if (neighbor.q === targetQ && neighbor.r === targetR) {
-                                    // Neighbor is the target - allow reaching it
-                                    findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, beforeIncreasing, afterIncreasing, currentPath, throneEntryDir);
-                                }
-                                // Don't allow moving to other ring 1 cells
-                                continue;
-                            }
-                            // Allow continuing to other rings if needed
-                        }
-
-                        const increasing = afterIncreasing;
-                        if (increasing) {
-                            if (neighborRing <= currentRing) continue; // Must strictly increase
-                            if (neighborRing > targetRing) continue; // Can't exceed target
-                        } else {
-                            if (neighborRing >= currentRing) continue; // Must strictly decrease
-                            if (neighborRing < targetRing) continue; // Can't go below target
-                        }
-
-                        findPathThroughThrone(neighbor.q, neighbor.r, targetQ, targetR, neighborRing, targetRing, beforeIncreasing, afterIncreasing, currentPath, throneEntryDir);
+                        continue; // Don't continue from target
                     }
+
+                    // Check if this cell has an enemy (path must travel through enemies)
+                    const occupant = getPieceAt(neighbor.q, neighbor.r);
+                    if (!occupant || !occupant.alive) continue; // Must have a piece
+                    if (occupant.player === activePlayer) continue; // Can't be an ally (except endpoints which we already checked above)
+
+                    // Continue pathfinding
+                    // Entry direction for next hex is the direction we came from (opposite of exitDir)
+                    const nextEntryDir = (exitDir + 3) % 6;
+                    findPathWithRules(
+                        neighbor.q, neighbor.r,
+                        nextEntryDir,
+                        targetQ, targetR,
+                        currentPath,
+                        newLean
+                    );
                 }
             }
 
@@ -2289,8 +2244,34 @@
             return -1;
         }
 
+        // Verify that a path travels exclusively through enemies (excluding endpoints which are allies)
+        function isPathValidForPinning(path, activePlayer, enemies) {
+            // Path must have at least 3 cells (start ally, middle enemies, end ally)
+            if (path.length < 3) return false;
+
+            // Check that endpoints are allies
+            const startPiece = getPieceAt(path[0].q, path[0].r);
+            const endPiece = getPieceAt(path[path.length - 1].q, path[path.length - 1].r);
+            if (!startPiece || !startPiece.alive || startPiece.player !== activePlayer) return false;
+            if (!endPiece || !endPiece.alive || endPiece.player !== activePlayer) return false;
+
+            // Check that every cell along the path (excluding endpoints) has an enemy
+            for (let i = 1; i < path.length - 1; i++) {
+                const step = path[i];
+                const occupant = getPieceAt(step.q, step.r);
+
+                // Must have an enemy at this position
+                if (!occupant || !occupant.alive) return false;
+                if (occupant.player === activePlayer) return false; // Can't be an ally
+                if (!enemies.includes(occupant)) return false; // Must be in enemies list
+            }
+
+            return true;
+        }
+
         function isPathPinned(path, enemies) {
-            // Check if every cell along the path (excluding endpoints) has an enemy
+            // Legacy function - now just checks that middle cells have enemies
+            // The pathfinding already ensures paths travel through enemies, but keep this for safety
             for (let i = 1; i < path.length - 1; i++) {
                 const step = path[i];
                 const occupant = getPieceAt(step.q, step.r);
