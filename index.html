@@ -28,7 +28,7 @@
             --player-cpu: #a855f7;
             --player-cpu-dim: #7c3aed;
             --throne: #d4af37;
-            --pin-indicator: #ff6b6b;
+            --pin-indicator: #fbbf24; /* Bright amber/yellow for pinned pieces */
             --valid-move: rgba(100, 200, 100, 0.3);
             --damage-path: rgba(255, 165, 0, 0.5);
             --path-highlight: rgba(100, 150, 255, 0.4);
@@ -189,7 +189,15 @@
         }
 
         .army-piece.pinned {
-            border-color: var(--pin-indicator);
+            border: 3px solid var(--pin-indicator);
+            box-shadow: 0 0 8px var(--pin-indicator);
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 3px,
+                rgba(251, 191, 36, 0.15) 3px,
+                rgba(251, 191, 36, 0.15) 6px
+            );
         }
 
         /* Board Area */
@@ -301,18 +309,9 @@
             filter: drop-shadow(0 0 8px var(--accent-gold));
         }
 
-        .piece.pinned {
-            filter: drop-shadow(0 0 6px var(--pin-indicator));
-        }
-
         .piece.used {
             opacity: 0.5;
             filter: grayscale(0.7);
-        }
-
-        .piece.used.pinned {
-            opacity: 0.5;
-            filter: grayscale(0.7) drop-shadow(0 0 6px var(--pin-indicator));
         }
 
         .piece-stat {
@@ -1321,6 +1320,28 @@
             const svg = document.getElementById('game-board');
             svg.innerHTML = '';
 
+            // Create defs for patterns
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            
+            // Diagonal stripe pattern for pinned pieces
+            const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+            pattern.setAttribute('id', 'pin-stripes');
+            pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+            pattern.setAttribute('width', '8');
+            pattern.setAttribute('height', '8');
+            pattern.setAttribute('patternTransform', 'rotate(45)');
+            
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            line.setAttribute('x', '0');
+            line.setAttribute('y', '0');
+            line.setAttribute('width', '4');
+            line.setAttribute('height', '8');
+            line.setAttribute('fill', 'rgba(251, 191, 36, 0.4)'); // Semi-transparent amber
+            
+            pattern.appendChild(line);
+            defs.appendChild(pattern);
+            svg.appendChild(defs);
+
             // Create hex group
             const hexGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             hexGroup.id = 'hex-group';
@@ -1409,6 +1430,19 @@
                     g.classList.add('used');
                 }
 
+                // Pin border (rendered first, behind everything)
+                if (piece.pinned) {
+                    const borderCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    borderCircle.setAttribute('cx', x);
+                    borderCircle.setAttribute('cy', y);
+                    borderCircle.setAttribute('r', HEX_SIZE * 0.6);
+                    borderCircle.setAttribute('fill', 'none');
+                    borderCircle.setAttribute('stroke', '#fbbf24'); // Amber color
+                    borderCircle.setAttribute('stroke-width', 4);
+                    borderCircle.setAttribute('pointer-events', 'none');
+                    g.appendChild(borderCircle);
+                }
+
                 // Piece background
                 const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 circle.setAttribute('cx', x);
@@ -1433,6 +1467,17 @@
                 circle.setAttribute('stroke', strokeColor);
                 circle.setAttribute('stroke-width', 2);
                 g.appendChild(circle);
+
+                // Diagonal stripe overlay for pinned pieces (behind text)
+                if (piece.pinned) {
+                    const stripeOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    stripeOverlay.setAttribute('cx', x);
+                    stripeOverlay.setAttribute('cy', y);
+                    stripeOverlay.setAttribute('r', HEX_SIZE * 0.6);
+                    stripeOverlay.setAttribute('fill', 'url(#pin-stripes)');
+                    stripeOverlay.setAttribute('pointer-events', 'none');
+                    g.appendChild(stripeOverlay);
+                }
 
                 // Piece symbol
                 const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -1487,6 +1532,12 @@
 
                 pieceGroup.appendChild(g);
             });
+
+            // Ensure piece-group is always on top after rendering pieces
+            const svg = document.getElementById('game-board');
+            if (svg && pieceGroup.parentNode === svg) {
+                svg.appendChild(pieceGroup);
+            }
         }
 
         function highlightValidMoves(moves) {
@@ -2440,8 +2491,8 @@
                     // Use player team colors for preview pinning
                     // Player 1: brighter red, Player 2: brighter blue for preview
                     const previewColor = player === 1 ? '#ff6b6b' : '#6bb5ff';
-                    const opacity = '0.8';
-                    const strokeWidth = '3';
+                    const opacity = '0.95';
+                    const strokeWidth = '5';
 
                     pathElement.setAttribute('d', pathData);
                     pathElement.setAttribute('stroke', previewColor);
@@ -2478,9 +2529,9 @@
 
                     // Use team color for the pin line
                     const teamColor = player === 1 ? 'var(--player1)' : 'var(--player2)';
-                    // Make blue (player 2) pins more visible
-                    const opacity = player === 2 ? '0.7' : '0.5';
-                    const strokeWidth = '3';
+                    // Make both pins highly visible
+                    const opacity = '0.9';
+                    const strokeWidth = '5';
 
                     pathElement.setAttribute('d', pathData);
                     pathElement.setAttribute('stroke', teamColor);
@@ -2492,6 +2543,13 @@
 
                     pinningGroup.appendChild(pathElement);
                 });
+            }
+
+            // Ensure piece-group is always on top by moving it to the end
+            const svg = document.getElementById('game-board');
+            const pieceGroup = document.getElementById('piece-group');
+            if (svg && pieceGroup) {
+                svg.appendChild(pieceGroup);
             }
         }
 
@@ -2801,6 +2859,7 @@
             saveTurnSnapshot();
 
             updateUI();
+            updateArmyDisplay(); // Update army panel to reflect new pinning status
             clearHighlights();
             renderPieces();
             document.getElementById('btn-rotate').style.display = 'none';
@@ -3154,6 +3213,7 @@
                     exitRotationMode();
                     useAction(gameState.selectedPiece);
                     gameState.selectedPiece = null;
+                    updateArmyDisplay(); // Update army panel to reflect new pinning status
                     renderPieces();
                 }
             });
@@ -3164,6 +3224,7 @@
                     exitRotationMode();
                     useAction(gameState.selectedPiece);
                     gameState.selectedPiece = null;
+                    updateArmyDisplay(); // Update army panel to reflect new pinning status
                     renderPieces();
                 }
             });
