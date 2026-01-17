@@ -1629,9 +1629,9 @@
                     let wouldKill = false;
 
                     if (occupant && occupant.player !== piece.player) {
-                        // Check if the attacker is pinning this target
-                        const occupantIndex = gameState.pieces.indexOf(occupant);
-                        const attackerIndex = gameState.pieces.indexOf(piece);
+                        // Check if the attacker is pinning this target (using coordinates instead of references)
+                        const occupantIndex = gameState.pieces.findIndex(p => p.q === occupant.q && p.r === occupant.r);
+                        const attackerIndex = gameState.pieces.findIndex(p => p.q === piece.q && p.r === piece.r);
                         const isPinningPiece = occupantIndex >= 0 &&
                             attackerIndex >= 0 &&
                             gameState.pinningMap.has(occupantIndex) &&
@@ -1844,20 +1844,53 @@
             const totalDamageInstances = 1; // Destination always takes 1 instance of damage
 
             // Check if the attacker is pinning this target (using simulated pin state)
-            const occupantIndex = gameState.pieces.indexOf(destAfterSimulation);
+            // Use coordinates instead of indexOf to avoid reference issues
+            const occupantIndex = gameState.pieces.findIndex(p => p.q === destAfterSimulation.q && p.r === destAfterSimulation.r);
             const attackerIndex = pieceIndex;
             const isPinningPiece = occupantIndex >= 0 &&
                 gameState.pinningMap.has(occupantIndex) &&
                 gameState.pinningMap.get(occupantIndex).has(attackerIndex);
 
-            // Check if destination would die
-            let wouldKill;
-            if (isPinningPiece && destAfterSimulation.pinned) {
-                // Attacker is pinning the target - must kill with damage, not insta-kill
-                wouldKill = canKillWithRam(piece, destAfterSimulation, totalDamageInstances);
+            // Check if destination would die (using same logic as applyDamage)
+            let wouldKill = false;
+            
+            // Check if target would still be pinned without attacker
+            if (destAfterSimulation.pinned && attackerIndex !== null) {
+                const stillPinnedWithoutAttacker = isStillPinnedWithoutAttacker(destAfterSimulation, attackerIndex);
+                if (stillPinnedWithoutAttacker) {
+                    // Still pinned without attacker - insta-kill allowed
+                    wouldKill = true;
+                } else {
+                    // Not pinned without attacker - must kill with damage
+                    wouldKill = canKillWithRam(piece, destAfterSimulation, totalDamageInstances);
+                }
+            } else if (destAfterSimulation.pinned) {
+                // Target is pinned, no attacker specified - insta-kill
+                wouldKill = true;
             } else {
-                // Normal case: pinned pieces die instantly (unless pinned by attacker)
-                wouldKill = destAfterSimulation.pinned || canKillWithRam(piece, destAfterSimulation, totalDamageInstances);
+                // Not pinned - must kill with damage
+                wouldKill = canKillWithRam(piece, destAfterSimulation, totalDamageInstances);
+            }
+
+            // Handle King special case (matching applyDamage logic)
+            if (PIECE_TYPES[destAfterSimulation.type].isKing) {
+                if (destAfterSimulation.pinned && isPinningPiece) {
+                    // Attacker is pinning King - check if still pinned without attacker
+                    const stillPinnedWithoutAttacker = isStillPinnedWithoutAttacker(destAfterSimulation, attackerIndex);
+                    if (stillPinnedWithoutAttacker) {
+                        // Still pinned without attacker - insta-kill allowed
+                        wouldKill = true;
+                    } else {
+                        // Not pinned without attacker - can damage King
+                        wouldKill = destAfterSimulation.hp <= totalDamageInstances * ramDamage;
+                    }
+                } else if (destAfterSimulation.pinned) {
+                    // King is pinned, attacker is not pinning - insta-kill allowed
+                    wouldKill = true;
+                } else {
+                    // King not pinned - cannot be damaged
+                    wouldKill = false;
+                }
             }
 
             // Restore original states
@@ -1936,9 +1969,139 @@
             return true;
         }
 
+        // Check if a piece would still be pinned without the attacker's involvement
+        function isStillPinnedWithoutAttacker(targetPiece, attackerIndex) {
+            if (!targetPiece || !targetPiece.alive) return false;
+            if (attackerIndex === null) return targetPiece.pinned;
+
+            // Find target index using coordinates instead of reference (more reliable)
+            const targetIndex = gameState.pieces.findIndex(p => p.q === targetPiece.q && p.r === targetPiece.r);
+            if (targetIndex < 0) return false;
+            
+            // If attacker is the target itself, removing attacker removes target, so target can't be pinned
+            if (targetIndex === attackerIndex) return false;
+
+            // Save current state
+            const savedPieces = JSON.parse(JSON.stringify(gameState.pieces));
+            const savedPinningPaths = [...gameState.pinningPaths];
+            const savedPinningMap = new Map(gameState.pinningMap);
+
+            // Temporarily remove the attacker (mark as not alive for pinning calculation)
+            const attacker = gameState.pieces[attackerIndex];
+            const attackerWasAlive = attacker.alive;
+            attacker.alive = false;
+
+            // Recalculate pins without the attacker using the same logic as updatePins
+            // This ensures consistency with the main pinning calculation
+            const activePlayer = gameState.currentPlayer;
+            const otherPlayer = activePlayer === 1 ? 2 : 1;
+
+            // Reset pin states
+            gameState.pieces.forEach(p => {
+                if (p.alive) {
+                    p.pinned = false;
+                }
+            });
+            gameState.pinningPaths = [];
+            gameState.pinningMap.clear();
+
+            // Group pieces by player (attacker is now "dead")
+            const piecesByPlayer = { 1: [], 2: [] };
+            gameState.pieces.forEach(p => {
+                if (p.alive) {
+                    piecesByPlayer[p.player].push(p);
+                }
+            });
+
+            // Step 1: Calculate pinnings from active player (without attacker)
+            const activeAllies = piecesByPlayer[activePlayer];
+            for (let i = 0; i < activeAllies.length; i++) {
+                for (let j = i + 1; j < activeAllies.length; j++) {
+                    const ally1 = activeAllies[i];
+                    const ally2 = activeAllies[j];
+                    const paths = findValidPinningPaths(ally1, ally2, activePlayer);
+                    paths.forEach(path => {
+                        const ally1Index = gameState.pieces.findIndex(p => p === ally1);
+                        const ally2Index = gameState.pieces.findIndex(p => p === ally2);
+                        path.forEach(step => {
+                            if (step.q === ally1.q && step.r === ally1.r) return;
+                            if (step.q === ally2.q && step.r === ally2.r) return;
+                            const enemy = getPieceAt(step.q, step.r);
+                            if (enemy && enemy.player !== activePlayer && enemy.alive) {
+                                enemy.pinned = true;
+                                const enemyIndex = gameState.pieces.findIndex(p => p === enemy);
+                                if (!gameState.pinningMap.has(enemyIndex)) {
+                                    gameState.pinningMap.set(enemyIndex, new Set());
+                                }
+                                gameState.pinningMap.get(enemyIndex).add(ally1Index);
+                                gameState.pinningMap.get(enemyIndex).add(ally2Index);
+                            }
+                        });
+                    });
+                }
+            }
+
+            // Step 2: Calculate pinnings from other player (excluding pinned pieces)
+            const otherAllies = piecesByPlayer[otherPlayer].filter(p => !p.pinned);
+            for (let i = 0; i < otherAllies.length; i++) {
+                for (let j = i + 1; j < otherAllies.length; j++) {
+                    const ally1 = otherAllies[i];
+                    const ally2 = otherAllies[j];
+                    const paths = findValidPinningPaths(ally1, ally2, otherPlayer);
+                    paths.forEach(path => {
+                        const ally1Index = gameState.pieces.findIndex(p => p === ally1);
+                        const ally2Index = gameState.pieces.findIndex(p => p === ally2);
+                        path.forEach(step => {
+                            if (step.q === ally1.q && step.r === ally1.r) return;
+                            if (step.q === ally2.q && step.r === ally2.r) return;
+                            const enemy = getPieceAt(step.q, step.r);
+                            if (enemy && enemy.player !== otherPlayer && enemy.alive) {
+                                enemy.pinned = true;
+                                const enemyIndex = gameState.pieces.findIndex(p => p === enemy);
+                                if (!gameState.pinningMap.has(enemyIndex)) {
+                                    gameState.pinningMap.set(enemyIndex, new Set());
+                                }
+                                gameState.pinningMap.get(enemyIndex).add(ally1Index);
+                                gameState.pinningMap.get(enemyIndex).add(ally2Index);
+                            }
+                        });
+                    });
+                }
+            }
+
+            // Check if target is still pinned (use the recalculated piece from gameState.pieces)
+            // IMPORTANT: Save this value BEFORE restoring state
+            // Use coordinates to find target instead of index (more reliable)
+            const recalculatedTarget = getPieceAt(targetPiece.q, targetPiece.r);
+            const stillPinned = recalculatedTarget && recalculatedTarget.alive && recalculatedTarget.pinned;
+
+            // Restore state by copying properties back to each piece
+            // DO NOT replace the array or objects, as that would break existing references
+            const parsedSaved = JSON.parse(JSON.stringify(savedPieces));
+            for (let i = 0; i < gameState.pieces.length; i++) {
+                if (i < parsedSaved.length) {
+                    // Restore all properties from saved state
+                    Object.assign(gameState.pieces[i], parsedSaved[i]);
+                }
+            }
+            gameState.pinningPaths = savedPinningPaths;
+            gameState.pinningMap = savedPinningMap;
+
+            return stillPinned;
+        }
+
         function applyDamage(piece, damage, attackerIndex = null) {
-            // Find the piece index
-            const pieceIndex = gameState.pieces.indexOf(piece);
+            // Find the piece index using coordinates (more reliable than indexOf)
+            const pieceIndex = gameState.pieces.findIndex(p => p.q === piece.q && p.r === piece.r);
+            
+            // If piece not found, return early
+            if (pieceIndex < 0) {
+                console.error('applyDamage: piece not found at', piece.q, piece.r);
+                return;
+            }
+            
+            // Use the actual piece from gameState.pieces to ensure we modify the right object
+            const actualPiece = gameState.pieces[pieceIndex];
 
             // Check if the attacker is one of the pieces pinning this target
             const isPinningPiece = attackerIndex !== null &&
@@ -1946,37 +2109,59 @@
                 gameState.pinningMap.has(pieceIndex) &&
                 gameState.pinningMap.get(pieceIndex).has(attackerIndex);
 
-            // Pinned pieces die immediately when dealt any damage (including King)
-            // BUT NOT if the attacker is one of the pieces pinning them
-            if (piece.pinned && !isPinningPiece) {
-                piece.alive = false;
-                if (PIECE_TYPES[piece.type].isKing) {
-                    addLog(`${piece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
-                    endGame(piece.player === 1 ? 2 : 1, 'kingkill');
-                } else {
-                    addLog(`${piece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[piece.type].name} destroyed (pinned)`, piece.player);
-                }
-                return;
-            }
-
-            if (PIECE_TYPES[piece.type].isKing) {
-                // King can only be damaged if pinned (and not by pinning piece)
-                // If pinned and attacked by pinning piece, apply normal damage
-                if (piece.pinned && isPinningPiece) {
-                    piece.hp -= damage;
-                    if (piece.hp <= 0) {
-                        piece.alive = false;
-                        addLog(`${piece.player === 1 ? 'P1' : 'P2'} King destroyed!`, 'system');
-                        endGame(piece.player === 1 ? 2 : 1, 'kingkill');
+            // Check if piece would still be pinned without the attacker
+            // If yes, it dies immediately; if no, apply normal damage
+            if (actualPiece.pinned) {
+                if (attackerIndex !== null) {
+                    const stillPinnedWithoutAttacker = isStillPinnedWithoutAttacker(actualPiece, attackerIndex);
+                    if (stillPinnedWithoutAttacker) {
+                        // Still pinned without attacker - die immediately
+                        actualPiece.alive = false;
+                        if (PIECE_TYPES[actualPiece.type].isKing) {
+                            addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
+                            endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
+                        } else {
+                            addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[actualPiece.type].name} destroyed (pinned)`, actualPiece.player);
+                        }
+                        return;
                     }
+                    // Not pinned without attacker - continue to normal damage logic below
+                } else {
+                    // Pinned, but no attacker specified - die immediately
+                    actualPiece.alive = false;
+                    if (PIECE_TYPES[actualPiece.type].isKing) {
+                        addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
+                        endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
+                    } else {
+                        addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[actualPiece.type].name} destroyed (pinned)`, actualPiece.player);
+                    }
+                    return;
+                }
+            }
+
+            // Handle King special case
+            if (PIECE_TYPES[actualPiece.type].isKing) {
+                // If we got here, King was pinned but is no longer pinned after removing attacker
+                // OR King is not pinned at all
+                // King can only be damaged if it was pinned and no longer pinned after removing attacker
+                if (!actualPiece.pinned) {
+                    // King not pinned - cannot be damaged
+                    return;
+                }
+                // King was pinned but no longer pinned - apply normal damage
+                actualPiece.hp -= damage;
+                if (actualPiece.hp <= 0) {
+                    actualPiece.alive = false;
+                    addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed!`, 'system');
+                    endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
                 }
                 return;
             }
 
-            piece.hp -= damage;
-            if (piece.hp <= 0) {
-                piece.alive = false;
-                addLog(`${piece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[piece.type].name} destroyed`, piece.player);
+            actualPiece.hp -= damage;
+            if (actualPiece.hp <= 0) {
+                actualPiece.alive = false;
+                addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[actualPiece.type].name} destroyed`, actualPiece.player);
             }
         }
 
@@ -2907,35 +3092,20 @@
             }
 
             // If landing on enemy, must kill it
+            // Use simulateMoveAndValidate to check if move is valid (reuses same logic as applyDamage)
             if (occupant && occupant.player !== piece.player) {
-                // Check if destination is already in damagePath (would only take 1 instance of damage)
-                const destInPath = damagePath.some(pos => pos.q === destination.q && pos.r === destination.r);
-                const totalDamageInstances = destInPath ? damagePath.length : damagePath.length + 1;
-
-                // Check if the attacker is pinning this target
-                const occupantIndex = gameState.pieces.indexOf(occupant);
-                const attackerIndex = gameState.pathStartPiece;
-                const isPinningPiece = occupantIndex >= 0 &&
-                    gameState.pinningMap.has(occupantIndex) &&
-                    gameState.pinningMap.get(occupantIndex).has(attackerIndex);
-
-                // If the attacker is pinning the target, they can't insta-kill it
-                // They must deal enough damage to kill it normally
-                let wouldKill;
-                if (isPinningPiece && occupant.pinned) {
-                    // Attacker is pinning the target - must kill with damage, not insta-kill
-                    wouldKill = canKillWithRam(piece, occupant, totalDamageInstances);
-                    if (!wouldKill) {
-                        addLog('Cannot kill piece that you are pinning!', 'system');
-                        return;
-                    }
-                } else {
-                    // Normal case: pinned pieces die instantly (unless pinned by attacker)
-                    wouldKill = occupant.pinned || canKillWithRam(piece, occupant, totalDamageInstances);
-                    if (!wouldKill) {
-                        addLog('Cannot land on enemy that would survive!', 'system');
-                        return;
-                    }
+                const move = {
+                    q: destination.q,
+                    r: destination.r,
+                    damagePath: damagePath,
+                    willKill: true,
+                    path: gameState.currentPath
+                };
+                const ramDamage = gameState.unitConfigs[piece.type].ramDamage;
+                
+                if (!simulateMoveAndValidate(gameState.pathStartPiece, destination.q, destination.r, move, ramDamage)) {
+                    addLog('Cannot land on enemy that would survive!', 'system');
+                    return;
                 }
             }
 
