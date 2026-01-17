@@ -2416,7 +2416,7 @@
 
             // If there are preview paths, only show preview (hide current pinning)
             if (gameState.previewPinningPaths.length > 0) {
-                // Render preview pinning paths in green
+                // Render preview pinning paths using player colors (red/blue)
                 gameState.previewPinningPaths.forEach(pinningData => {
                     const path = pinningData.path;
                     const player = pinningData.player;
@@ -2437,9 +2437,10 @@
                         }
                     });
 
-                    // Use green color for preview pinning
-                    const previewColor = '#22c55e'; // Green color
-                    const opacity = '0.7';
+                    // Use player team colors for preview pinning
+                    // Player 1: brighter red, Player 2: brighter blue for preview
+                    const previewColor = player === 1 ? '#ff6b6b' : '#6bb5ff';
+                    const opacity = '0.8';
                     const strokeWidth = '3';
 
                     pathElement.setAttribute('d', pathData);
