@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Momentum Shift</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1e;
+            --grid-color: #2a2a35;
+            --cell-size: 50px;
+            /* Reduced from 60px */
+            --gap-size: 4px;
+            --p1-color: #ff4757;
+            /* Red */
+            --p2-color: #2ed573;
+            /* Green */
+            --p3-color: #1e90ff;
+            /* Blue */
+            --p4-color: #ffa502;
+            /* Orange */
+            --text-color: #eee;
+            --accent-color: #70a1ff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* Layout */
+        .game-container {
+            display: flex;
+            gap: 200px;
+            /* Adjusted gap */
+            align-items: flex-start;
+            padding: 20px;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* ... (rest of CSS remains similar until player-info-card) */
+
+        /* Player Info Cards */
+        .player-info-card {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            /* Prepare for border change */
+            color: #ccc;
+            min-width: 100px;
+            text-align: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 5;
+        }
+
+        @keyframes pulse-border {
+            0% {
+                box-shadow: 0 0 10px currentColor;
+            }
+
+            50% {
+                box-shadow: 0 0 25px currentColor, 0 0 5px white;
+            }
+
+            100% {
+                box-shadow: 0 0 10px currentColor;
+            }
+        }
+
+        .player-info-card.active-turn {
+            border-width: 3px;
+            border-color: currentColor;
+            /* Uses the text color (player color) */
+            background: rgba(0, 0, 0, 0.8);
+            /* Darker background to make color pop */
+            transform: scale(1.15);
+            color: #fff;
+            animation: pulse-border 2s infinite;
+            z-index: 10;
+        }
+
+        /* Board Area */
+        .board-wrapper {
+            position: relative;
+            padding: 40px;
+            /* Space for entry buttons */
+            background: #111;
+            border-radius: 16px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, var(--cell-size));
+            grid-template-rows: repeat(8, var(--cell-size));
+            gap: var(--gap-size);
+            background-color: var(--grid-color);
+            padding: var(--gap-size);
+            border-radius: 4px;
+        }
+
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            background-color: rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+            position: relative;
+        }
+
+        /* Pieces */
+        .piece {
+            width: 80%;
+            height: 80%;
+            position: absolute;
+            top: 10%;
+            left: 10%;
+            border-radius: 8px;
+            /* Rectangular car look */
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+            transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+            z-index: 2;
+            cursor: pointer;
+        }
+
+        .piece::after {
+            /* Front indicator */
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.3);
+            width: 20%;
+            height: 20%;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .piece.p1 {
+            background: var(--p1-color);
+            box-shadow: 0 0 10px var(--p1-color);
+        }
+
+        .piece.p2 {
+            background: var(--p2-color);
+            box-shadow: 0 0 10px var(--p2-color);
+        }
+
+        .piece.p3 {
+            background: var(--p3-color);
+            box-shadow: 0 0 10px var(--p3-color);
+        }
+
+        .piece.p4 {
+            background: var(--p4-color);
+            box-shadow: 0 0 10px var(--p4-color);
+        }
+
+        /* UI Elements */
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            color: var(--accent-color);
+        }
+
+        .status-panel {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .phase-indicator {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+
+        .current-action {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .scores {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .score-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .score-row.active {
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        button.btn-action {
+            background: var(--accent-color);
+            color: #111;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        button.btn-action:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        button.btn-action:disabled {
+            background: #444;
+            color: #777;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Entry Indicators */
+        .entry-markers {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .entry-btn {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            cursor: pointer;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            transition: 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .entry-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        /* Directional Helpers */
+        .direction-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .arrow-btn {
+            width: 30px;
+            height: 30px;
+            background: #fff;
+            color: #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            pointer-events: auto;
+            position: absolute;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            transition: 0.2s;
+        }
+
+        .arrow-btn:hover {
+            background: var(--accent-color);
+        }
+
+        .arrow-btn.up {
+            top: -20px;
+        }
+
+        .arrow-btn.down {
+            bottom: -20px;
+        }
+
+        .arrow-btn.left {
+            left: -20px;
+        }
+
+        .arrow-btn.right {
+            right: -20px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: #222;
+            border: 2px solid var(--accent-color);
+            padding: 40px;
+            text-align: center;
+            border-radius: 12px;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            transform: scale(0.8);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            min-width: 300px;
+        }
+
+        .modal-overlay.visible .modal-content {
+            transform: scale(1);
+        }
+
+        .winner-text {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .score-final {
+            font-size: 18px;
+            color: #ccc;
+            margin-bottom: 30px;
+        }
+
+        /* Positions - assuming .board-wrapper is relative */
+        /* 4-Player Positions (Cardinals) */
+        .p-info-north {
+            top: -100px;
+            /* Moved further out */
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .p-info-south {
+            bottom: -100px;
+            /* Moved further out */
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .p-info-east {
+            right: -175px;
+            /* Intermediate distance */
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .p-info-west {
+            left: -175px;
+            /* Intermediate distance */
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        /* 2-Player Positions (Corners) */
+        /* P1 (North/East) -> Top Right */
+        .p-info-corner-ne {
+            top: -80px;
+            right: -120px;
+            /* Reduced distance */
+            text-align: left;
+        }
+
+        /* P2 (South/West) -> Bottom Left */
+        .p-info-corner-sw {
+            bottom: -80px;
+            left: -120px;
+            /* Reduced distance */
+            text-align: right;
+        }
+
+        /* Adjust active state transforms to keep centering */
+        .p-info-north.active-turn {
+            transform: translateX(-50%) scale(1.1);
+        }
+
+        .p-info-south.active-turn {
+            transform: translateX(-50%) scale(1.1);
+        }
+
+        .p-info-east.active-turn {
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .p-info-west.active-turn {
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .p-info-corner-ne.active-turn {
+            transform: scale(1.1);
+        }
+
+        .p-info-corner-sw.active-turn {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="game-container">
+        <!-- Sidebar -->
+        <div class="sidebar" style="width: 200px;"> <!-- Reduced width -->
+            <h1>Momentum Shift</h1>
+
+            <div class="status-panel" style="margin-top: 20px;">
+                <div class="phase-indicator" id="phase-lbl">Phase 1</div>
+                <div class="current-action" id="action-lbl">Optional Shift</div>
+            </div>
+
+            <div style="flex-grow: 1;"></div> <!-- Spacer -->
+
+            <button class="btn-action" id="skip-btn">Skip Shift</button>
+            <button class="btn-action" id="reset-btn" style="background: #e55039; margin-top: 10px;">Reset Game</button>
+        </div>
+
+        <!-- Board -->
+        <div class="board-wrapper">
+            <div id="board" class="board"></div>
+            <div id="entry-layer" class="entry-markers"></div>
+            <div id="player-info-layer"></div> <!-- New Layer -->
+        </div>
+    </div>
+
+    <!-- Setup Screen -->
+    <div class="modal-overlay visible" id="setup-screen" style="background: var(--bg-color);">
+        <div class="modal-content"
+            style="border: none; box-shadow: none; background: transparent; transform: scale(1);">
+            <h1 style="font-size: 48px; margin-bottom: 40px; text-shadow: 0 0 20px rgba(112, 161, 255, 0.5);">Momentum
+                Shift</h1>
+            <div style="display: flex; gap: 20px; justify-content: center;">
+                <button class="btn-action" onclick="startGame(2)" style="width: 200px; font-size: 20px; height: 80px;">2
+                    Players</button>
+                <button class="btn-action" onclick="startGame(4)"
+                    style="width: 200px; font-size: 20px; height: 80px; background: #2ed573;">4 Players</button>
+            </div>
+            <p style="margin-top: 30px; color: #888;">Select active players to begin</p>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="victory-modal">
+        <div class="modal-content">
+            <div class="winner-text" id="winner-text">Player 1 Wins!</div>
+            <div class="score-final" id="final-score">Score: 0</div>
+            <button class="btn-action" onclick="initGame()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // Game Config
+        // Game Config
+        const GRID_SIZE = 8;
+        let activePlayerCount = 2;
+        const MAX_RESERVE = 16;
+
+        // Colors
+        const COLORS = ['var(--p1-color)', 'var(--p2-color)', 'var(--p3-color)', 'var(--p4-color)'];
+
+        // State
+        let board = [];
+        let players = [];
+        let currentPlayerIdx = 0;
+        let currentPhase = 1; // 1: Shift, 2: Entry
+        let selectedCell = null; // {r, c}
+        let gameOver = false;
+
+        // Setup & Start
+        function showSetup() {
+            // Initial render of empty board for visuals behind blur
+            if (board.length === 0) {
+                board = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+                // Mock players for renderBoard safety if needed, though renderBoard checks board
+                // But renderBoard doesn't use players array except for colors?
+                // It uses players[currentPlayerIdx].color for entry buttons.
+                // So we must have dummy players to safe-guard render calls if any.
+                // But we won't call render functions here.
+            }
+            document.getElementById('victory-modal').classList.remove('visible');
+            document.getElementById('setup-screen').classList.add('visible');
+            document.querySelector('.game-container').style.filter = 'blur(5px)';
+        }
+
+        function startGame(count) {
+            activePlayerCount = count;
+            document.getElementById('setup-screen').classList.remove('visible');
+            document.querySelector('.game-container').style.filter = 'none';
+            initGame();
+        }
+
+        // Init
+        function initGame() {
+            // Reset Board
+            board = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+
+            document.getElementById('victory-modal').classList.remove('visible');
+
+            // Init Players
+            players = [];
+            for (let i = 0; i < activePlayerCount; i++) {
+                players.push({
+                    id: i,
+                    color: COLORS[i],
+                    reserve: MAX_RESERVE,
+                    score: 0,
+                    edges: [],
+                    active: true
+                });
+            }
+
+            // Define Edges
+            if (activePlayerCount === 2) {
+                players[0].edges = ['north', 'east'];
+                players[1].edges = ['south', 'west'];
+            } else {
+                players[0].edges = ['north'];
+                players[1].edges = ['east'];
+                players[2].edges = ['south'];
+                players[3].edges = ['west'];
+            }
+
+            currentPlayerIdx = 0;
+            currentPhase = 1;
+            selectedCell = null;
+            gameOver = false;
+
+            renderScores();
+            renderBoard();
+            updateUI();
+
+            // Initial check: if valid entries exist, show them. 
+            // Phase 1 (Shift) is impossible on empty board, so auto-skip to Phase 2.
+            if (isBoardEmpty()) {
+                currentPhase = 2;
+                updateUI();
+                const validEntries = getValidEntryPoints(players[currentPlayerIdx]);
+                if (validEntries.length > 0) {
+                    renderEntryPoints(validEntries);
+                } else {
+                    // Start game with blocked player? Rare/Impossible on empty board.
+                    endTurn();
+                }
+            }
+        }
+
+        // Logic
+        function getValidEntryPoints(player) {
+            if (!player) return [];
+            let points = [];
+            // Map edge names to coordinates
+            player.edges.forEach(edge => {
+                if (edge === 'north') {
+                    for (let c = 0; c < GRID_SIZE; c++) if (!board[0][c]) points.push({ r: -1, c: c, dir: 'down' });
+                }
+                if (edge === 'south') {
+                    for (let c = 0; c < GRID_SIZE; c++) if (!board[GRID_SIZE - 1][c]) points.push({ r: GRID_SIZE, c: c, dir: 'up' });
+                }
+                if (edge === 'west') {
+                    for (let r = 0; r < GRID_SIZE; r++) if (!board[r][0]) points.push({ r: r, c: -1, dir: 'right' });
+                }
+                if (edge === 'east') {
+                    for (let r = 0; r < GRID_SIZE; r++) if (!board[r][GRID_SIZE - 1]) points.push({ r: r, c: GRID_SIZE, dir: 'left' });
+                }
+            });
+            return points;
+        }
+
+        function isEmpty(r, c) {
+            return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE && board[r][c] === null;
+        }
+
+        function inBounds(r, c) {
+            return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE;
+        }
+
+        function isBoardEmpty() {
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (board[r][c] !== null) return false;
+                }
+            }
+            return true;
+        }
+
+        async function slidePiece(r, c, dr, dc, isEntry = false) {
+            const piece = isEntry ? { owner: currentPlayerIdx, id: Date.now() + Math.random() } : board[r][c];
+            if (!isEntry) {
+                board[r][c] = null;
+            } else {
+                players[currentPlayerIdx].reserve--;
+            }
+
+            let currR = isEntry ? r + dr : r;
+            let currC = isEntry ? c + dc : c;
+
+            while (true) {
+                let nextR = currR + dr;
+                let nextC = currC + dc;
+                if (!inBounds(nextR, nextC) || board[nextR][nextC] !== null) {
+                    break;
+                }
+                currR = nextR;
+                currC = nextC;
+            }
+
+            if (inBounds(currR, currC)) {
+                board[currR][currC] = piece;
+                renderBoard();
+                await new Promise(r => setTimeout(r, 150));
+
+                const matchesFound = processMatches();
+                if (matchesFound) {
+                    renderBoard();
+                    renderScores();
+                }
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        function processMatches() {
+            let matchedCoords = new Set();
+            let changed = false;
+            let scoresToAdd = new Array(activePlayerCount).fill(0);
+
+            const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (!board[r][c]) continue;
+                    const owner = board[r][c].owner;
+                    dirs.forEach(([dr, dc]) => {
+                        let pr = r - dr;
+                        let pc = c - dc;
+                        if (inBounds(pr, pc) && board[pr][pc] && board[pr][pc].owner === owner) return;
+
+                        let line = [];
+                        let k = 0;
+                        while (true) {
+                            let nr = r + dr * k;
+                            let nc = c + dc * k;
+                            if (inBounds(nr, nc) && board[nr][nc] && board[nr][nc].owner === owner) {
+                                line.push({ r: nr, c: nc });
+                                k++;
+                            } else {
+                                break;
+                            }
+                        }
+
+                        if (line.length >= 4) {
+                            scoresToAdd[owner] += line.length;
+                            line.forEach(pt => matchedCoords.add(`${pt.r},${pt.c}`));
+                        }
+                    });
+                }
+            }
+
+            if (matchedCoords.size > 0) {
+                changed = true;
+                players.forEach((p, i) => {
+                    if (scoresToAdd[i] > 0) p.score += scoresToAdd[i];
+                });
+                matchedCoords.forEach(str => {
+                    const [rows, cols] = str.split(',').map(Number);
+                    board[rows][cols] = null;
+                });
+            }
+            return changed;
+        }
+
+        function handleBoardClick(r, c) {
+            if (gameOver || currentPhase !== 1) return;
+            if (board[r][c]) {
+                selectedCell = { r, c };
+                renderBoard();
+            }
+        }
+
+        function handleDirectionClick(dr, dc) {
+            if (!selectedCell || currentPhase !== 1) return;
+            slidePiece(selectedCell.r, selectedCell.c, dr, dc).then(() => {
+                advancePhase();
+            });
+            selectedCell = null;
+            renderBoard();
+        }
+
+        function handleEntryClick(entryPt) {
+            if (currentPhase !== 2) return;
+            slidePiece(entryPt.r, entryPt.c, entryPt.dir === 'down' ? 1 : entryPt.dir === 'up' ? -1 : 0,
+                entryPt.dir === 'right' ? 1 : entryPt.dir === 'left' ? -1 : 0, true)
+                .then(() => {
+                    endTurn();
+                });
+        }
+
+        function advancePhase() {
+            currentPhase = 2;
+            selectedCell = null;
+            updateUI();
+            const validEntries = getValidEntryPoints(players[currentPlayerIdx]);
+            if (validEntries.length === 0 || players[currentPlayerIdx].reserve <= 0) {
+                console.log("Skipping Phase 2 (Blocked/Empty)");
+                endTurn();
+            } else {
+                renderEntryPoints(validEntries);
+            }
+        }
+
+        function checkAllInactive() {
+            return players.every(p => !p.active);
+        }
+
+        function updatePlayerActiveStatus(idx) {
+            const p = players[idx];
+            const entries = getValidEntryPoints(p);
+            p.active = (p.reserve > 0 || entries.length > 0);
+        }
+
+        function endTurn() {
+            updatePlayerActiveStatus(currentPlayerIdx);
+
+            let attempts = 0;
+            let nextIdx = currentPlayerIdx;
+            do {
+                nextIdx = (nextIdx + 1) % activePlayerCount;
+                updatePlayerActiveStatus(nextIdx);
+                attempts++;
+            } while (!players[nextIdx].active && attempts < activePlayerCount + 1);
+
+            if (checkAllInactive()) {
+                endGame();
+                return;
+            }
+
+            currentPlayerIdx = nextIdx;
+            startTurn();
+        }
+
+        function startTurn() {
+            selectedCell = null;
+            // If empty board, force phase 2
+            if (isBoardEmpty()) {
+                currentPhase = 2;
+                updateUI();
+                renderBoard();
+                renderScores();
+
+                const validEntries = getValidEntryPoints(players[currentPlayerIdx]);
+                if (validEntries.length > 0) {
+                    renderEntryPoints(validEntries);
+                } else {
+                    endTurn();
+                }
+            } else {
+                currentPhase = 1;
+                updateUI();
+                renderBoard();
+                renderScores();
+            }
+        }
+
+        function endGame() {
+            gameOver = true;
+            let winner = players.reduce((prev, curr) => (prev.score > curr.score) ? prev : curr);
+            document.getElementById('action-lbl').innerHTML = `<span style="color:${winner.color}">Winner: Player ${winner.id + 1}!</span>`;
+            document.getElementById('phase-lbl').textContent = "GAME OVER";
+
+            const modal = document.getElementById('victory-modal');
+            const winnerText = document.getElementById('winner-text');
+            const finalScore = document.getElementById('final-score');
+
+            winnerText.textContent = `Player ${winner.id + 1} Wins!`;
+            winnerText.style.color = winner.color;
+            finalScore.textContent = `Score: ${winner.score}`;
+            modal.classList.add('visible');
+        }
+
+        function renderBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            document.getElementById('entry-layer').innerHTML = '';
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.onclick = () => handleBoardClick(r, c);
+
+                    if (board[r][c]) {
+                        const p = document.createElement('div');
+                        const pClass = `p${board[r][c].owner + 1}`;
+                        p.className = `piece ${pClass}`;
+
+                        if (currentPhase === 1 && selectedCell && selectedCell.r === r && selectedCell.c === c) {
+                            p.style.boxShadow = "0 0 15px white";
+                            p.style.border = "2px solid white";
+                            const overlay = document.createElement('div');
+                            overlay.className = 'direction-overlay';
+                            const dirs = [
+                                { d: 'up', dr: -1, dc: 0 },
+                                { d: 'down', dr: 1, dc: 0 },
+                                { d: 'left', dr: 0, dc: -1 },
+                                { d: 'right', dr: 0, dc: 1 }
+                            ];
+                            dirs.forEach(dir => {
+                                let nr = r + dir.dr;
+                                let nc = c + dir.dc;
+                                if (inBounds(nr, nc) && isEmpty(nr, nc)) {
+                                    const btn = document.createElement('div');
+                                    btn.className = `arrow-btn ${dir.d}`;
+                                    btn.innerHTML = dir.d === 'up' ? '↑' : dir.d === 'down' ? '↓' : dir.d === 'left' ? '←' : '→';
+                                    btn.onclick = (e) => {
+                                        e.stopPropagation();
+                                        handleDirectionClick(dir.dr, dir.dc);
+                                    };
+                                    overlay.appendChild(btn);
+                                }
+                            });
+                            cell.appendChild(overlay);
+                        }
+                        cell.appendChild(p);
+                    }
+                    boardEl.appendChild(cell);
+                }
+            }
+        }
+
+        function renderEntryPoints(points) {
+            const layer = document.getElementById('entry-layer');
+            layer.innerHTML = '';
+            const CELL_SIZE = 50; /* Reduced */
+            const GAP_SIZE = 4;
+            const PADDING = 4;
+            const WRAPPER_PADDING = 40;
+            const OUTER_MARGIN = 35;
+            const centerOffset = (CELL_SIZE / 2) - 15;
+
+            points.forEach(pt => {
+                const btn = document.createElement('div');
+                btn.className = 'entry-btn';
+                if (players[currentPlayerIdx]) btn.style.borderColor = players[currentPlayerIdx].color;
+
+                const cellLeft = WRAPPER_PADDING + PADDING + pt.c * (CELL_SIZE + GAP_SIZE);
+                const cellTop = WRAPPER_PADDING + PADDING + pt.r * (CELL_SIZE + GAP_SIZE);
+
+                let top, left;
+                if (pt.dir === 'down') {
+                    top = WRAPPER_PADDING + PADDING - OUTER_MARGIN;
+                    left = cellLeft + centerOffset;
+                    btn.innerHTML = '↓';
+                } else if (pt.dir === 'up') {
+                    top = cellTop + 10;
+                    left = cellLeft + centerOffset;
+                    btn.innerHTML = '↑';
+                } else if (pt.dir === 'right') {
+                    top = cellTop + centerOffset;
+                    left = WRAPPER_PADDING + PADDING - OUTER_MARGIN;
+                    btn.innerHTML = '→';
+                } else if (pt.dir === 'left') {
+                    top = cellTop + centerOffset;
+                    left = cellLeft + 10;
+                    btn.innerHTML = '←';
+                }
+                btn.style.top = top + 'px';
+                btn.style.left = left + 'px';
+                btn.onclick = () => handleEntryClick(pt);
+                layer.appendChild(btn);
+            });
+        }
+
+        function renderScores() {
+            const layer = document.getElementById('player-info-layer');
+            layer.innerHTML = '';
+
+            players.forEach((p, idx) => {
+                const card = document.createElement('div');
+                card.className = 'player-info-card';
+
+                // Position Class
+                if (activePlayerCount === 2) {
+                    if (idx === 0) card.classList.add('p-info-corner-ne');
+                    if (idx === 1) card.classList.add('p-info-corner-sw');
+                } else {
+                    const positions = ['p-info-north', 'p-info-east', 'p-info-south', 'p-info-west'];
+                    card.classList.add(positions[idx]);
+                }
+
+                // Header Color
+                card.style.borderTop = `3px solid ${p.color}`;
+                if (idx === currentPlayerIdx) {
+                    card.classList.add('active-turn');
+                    card.style.color = p.color;
+                    card.style.boxShadow = `0 0 20px ${p.color}40`; // 40 = hex alpha
+                }
+
+                card.innerHTML = `
+                    <strong style="color:${p.color}">Player ${idx + 1}</strong>
+                    <div class="stats">
+                        <span>Score: ${p.score}</span>
+                        <span>Rsrv: ${p.reserve}</span>
+                    </div>
+                `;
+
+                layer.appendChild(card);
+            });
+        }
+
+        function updateUI() {
+            if (gameOver || !players[currentPlayerIdx]) return;
+            document.getElementById('phase-lbl').textContent = `Phase ${currentPhase}`;
+            document.getElementById('action-lbl').textContent = currentPhase === 1 ? 'Shift Existing Piece' : 'Enter New Piece';
+            document.getElementById('action-lbl').style.color = players[currentPlayerIdx].color;
+            document.getElementById('skip-btn').disabled = currentPhase !== 1;
+        }
+
+        document.getElementById('skip-btn').onclick = () => { if (currentPhase === 1) advancePhase(); };
+        document.getElementById('reset-btn').onclick = () => { showSetup(); };
+
+        // Initialize
+        showSetup();
+
+
+
+    </script>
+</body>
+
+</html>
