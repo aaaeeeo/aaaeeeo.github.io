@@ -505,6 +505,8 @@
                     Players</button>
                 <button class="btn-action" onclick="startGame(4)"
                     style="width: 200px; font-size: 20px; height: 80px; background: #2ed573;">4 Players</button>
+                <button class="btn-action" onclick="startGame(2, true)"
+                    style="width: 200px; font-size: 20px; height: 80px; background: #ffa502;">VS CPU</button>
             </div>
             <p style="margin-top: 30px; color: #888;">Select active players to begin</p>
         </div>
@@ -535,6 +537,7 @@
         let currentPlayerIdx = 0;
         let currentPhase = 1; // 1: Shift, 2: Entry
         let selectedCell = null; // {r, c}
+        let isCPUMode = false;
         let gameOver = false;
 
         // Setup & Start
@@ -553,8 +556,9 @@
             document.querySelector('.game-container').style.filter = 'blur(5px)';
         }
 
-        function startGame(count) {
+        function startGame(count, cpu = false) {
             activePlayerCount = count;
+            isCPUMode = cpu;
             document.getElementById('setup-screen').classList.remove('visible');
             document.querySelector('.game-container').style.filter = 'none';
             initGame();
@@ -576,7 +580,8 @@
                     reserve: MAX_RESERVE,
                     score: 0,
                     edges: [],
-                    active: true
+                    active: true,
+                    isCPU: (isCPUMode && i === 1)
                 });
             }
 
@@ -749,7 +754,7 @@
         }
 
         function handleBoardClick(r, c) {
-            if (gameOver || currentPhase !== 1 || isMoving) return;
+            if (gameOver || currentPhase !== 1 || isMoving || players[currentPlayerIdx].isCPU) return;
             if (board[r][c]) {
                 selectedCell = { r, c };
                 renderBoard();
@@ -760,7 +765,7 @@
         }
 
         function handleDirectionClick(dr, dc) {
-            if (!selectedCell || currentPhase !== 1 || isMoving) return;
+            if (!selectedCell || currentPhase !== 1 || isMoving || players[currentPlayerIdx].isCPU) return;
 
             // Clear entry layer immediately during transition
             document.getElementById('entry-layer').innerHTML = '';
@@ -773,7 +778,7 @@
         }
 
         function handleEntryClick(entryPt) {
-            if (currentPhase !== 2 || isMoving) return;
+            if (currentPhase !== 2 || isMoving || players[currentPlayerIdx].isCPU) return;
 
             // Clear entry layer immediately
             document.getElementById('entry-layer').innerHTML = '';
@@ -794,8 +799,12 @@
             if (validEntries.length === 0 || players[currentPlayerIdx].reserve <= 0) {
                 console.log("Skipping Phase 2 (Blocked/Empty)");
                 endTurn();
-            } else {
+            } else if (!players[currentPlayerIdx].isCPU) {
                 renderEntryPoints(validEntries);
+            }
+
+            if (players[currentPlayerIdx].isCPU) {
+                setTimeout(handleCPUTurn, 600);
             }
         }
 
@@ -805,8 +814,9 @@
 
         function updatePlayerActiveStatus(idx) {
             const p = players[idx];
-            const entries = getValidEntryPoints(p);
-            p.active = (p.reserve > 0 || entries.length > 0);
+            // Player is only active if they have reserves left to place.
+            // Shifting is only allowed if they have reserves.
+            p.active = (p.reserve > 0);
         }
 
         function endTurn() {
@@ -842,7 +852,7 @@
 
                 const validEntries = getValidEntryPoints(players[currentPlayerIdx]);
                 if (validEntries.length > 0) {
-                    renderEntryPoints(validEntries);
+                    if (!players[currentPlayerIdx].isCPU) renderEntryPoints(validEntries);
                 } else {
                     endTurn();
                 }
@@ -852,19 +862,238 @@
                 renderBoard();
                 renderScores();
             }
+
+            if (players[currentPlayerIdx]?.isCPU && !gameOver) {
+                setTimeout(handleCPUTurn, 600);
+            }
         }
+
+        async function handleCPUTurn() {
+            if (gameOver || !players[currentPlayerIdx].isCPU || isMoving) return;
+
+            const aiPlayerIdx = currentPlayerIdx;
+            const p = players[aiPlayerIdx];
+            const actionLbl = document.getElementById('action-lbl');
+            if (actionLbl) actionLbl.innerHTML = `<span style="color:${p.color}">CPU Thinking...</span>`;
+
+            await new Promise(r => setTimeout(r, 800)); // Minimal dramatic delay
+
+            // --- AI Brain Logic ---
+
+            function cloneBoard(b) {
+                return b.map(row => row.map(cell => cell ? { ...cell } : null));
+            }
+
+            function simulateSlide(b, r, c, dr, dc, isEntry, playerIdx) {
+                const newB = cloneBoard(b);
+                const piece = isEntry ? { owner: playerIdx, id: 'sim' } : newB[r][c];
+                if (!isEntry) newB[r][c] = null;
+
+                let currR = isEntry ? r + dr : r;
+                let currC = isEntry ? c + dc : c;
+                while (true) {
+                    let nextR = currR + dr;
+                    let nextC = currC + dc;
+                    if (!inBounds(nextR, nextC) || newB[nextR][nextC] !== null) break;
+                    currR = nextR;
+                    currC = nextC;
+                }
+                if (inBounds(currR, currC)) newB[currR][currC] = piece;
+                return newB;
+            }
+
+            function evaluate(b, playerIdx) {
+                let score = 0;
+                const oppIdx = (playerIdx + 1) % activePlayerCount;
+
+                // 1. Center Brake Priority (Managing Friction)
+                const centerWeight = [
+                    [1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 2, 2, 2, 2, 2, 2, 1],
+                    [1, 2, 4, 4, 4, 4, 2, 1],
+                    [1, 2, 4, 6, 6, 4, 2, 1],
+                    [1, 2, 4, 6, 6, 4, 2, 1],
+                    [1, 2, 4, 4, 4, 4, 2, 1],
+                    [1, 2, 2, 2, 2, 2, 2, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1],
+                ];
+
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        if (!b[r][c]) continue;
+                        const val = centerWeight[r][c] * 10;
+                        if (b[r][c].owner === playerIdx) score += val;
+                        else score -= val;
+                    }
+                }
+
+                // 2. Potential Matches (Look for 3-in-a-row)
+                // (Simplified for performance: check horizontal/vertical lines)
+                function countPotential(boardState, pIdx) {
+                    let pScore = 0;
+                    const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+                    for (let r = 0; r < GRID_SIZE; r++) {
+                        for (let c = 0; c < GRID_SIZE; c++) {
+                            if (boardState[r][c]?.owner === pIdx) {
+                                dirs.forEach(([dr, dc]) => {
+                                    let count = 1;
+                                    for (let k = 1; k < 4; k++) {
+                                        let nr = r + dr * k, nc = c + dc * k;
+                                        if (inBounds(nr, nc) && boardState[nr][nc]?.owner === pIdx) count++;
+                                        else break;
+                                    }
+                                    if (count === 3) pScore += 50;
+                                    if (count === 4) pScore += 1000;
+                                });
+                            }
+                        }
+                    }
+                    return pScore;
+                }
+
+                score += countPotential(b, playerIdx);
+                score -= countPotential(b, oppIdx) * 1.5; // Heavy defensive weight (Sabotage)
+
+                return score;
+            }
+
+            function minimax(b, depth, phase, playerIdx, alpha, beta) {
+                if (depth === 0) return evaluate(b, aiPlayerIdx);
+
+                if (phase === 1) {
+                    // Shift Phase
+                    let bestVal = -Infinity;
+                    let moves = [{ r: -1, c: -1, dr: 0, dc: 0, skip: true }]; // Always consider skipping
+                    for (let r = 0; r < GRID_SIZE; r++) {
+                        for (let c = 0; c < GRID_SIZE; c++) {
+                            if (b[r][c]) {
+                                [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dr, dc]) => {
+                                    if (inBounds(r + dr, c + dc) && !b[r + dr][c + dc]) moves.push({ r, c, dr, dc });
+                                });
+                            }
+                        }
+                    }
+
+                    for (const m of moves) {
+                        const nextB = m.skip ? cloneBoard(b) : simulateSlide(b, m.r, m.c, m.dr, m.dc, false, playerIdx);
+                        const val = minimax(nextB, depth - 1, 2, playerIdx, alpha, beta);
+                        bestVal = Math.max(bestVal, val);
+                        alpha = Math.max(alpha, val);
+                        if (beta <= alpha) break;
+                    }
+                    return bestVal;
+                } else {
+                    // Entry Phase
+                    let bestVal = Infinity; // Opponent (or same player's next sub-step) minimizes? 
+                    // Simplified: AI just wants best result for itself across both phases
+                    const entries = getValidEntryPointsForSimulation(b, players[playerIdx]);
+                    if (entries.length === 0) return evaluate(b, aiPlayerIdx);
+
+                    for (const e of entries) {
+                        const dr = e.dir === 'down' ? 1 : e.dir === 'up' ? -1 : 0;
+                        const dc = e.dir === 'right' ? 1 : e.dir === 'left' ? -1 : 0;
+                        const nextB = simulateSlide(b, e.r, e.c, dr, dc, true, playerIdx);
+                        const val = evaluate(nextB, aiPlayerIdx); // Terminal for this turn
+                        bestVal = Math.min(bestVal, val); // Assuming simplified greedy for phase 2
+                    }
+                    return bestVal;
+                }
+            }
+
+            // Helper for simulation
+            function getValidEntryPointsForSimulation(simBoard, player) {
+                let points = [];
+                player.edges.forEach(edge => {
+                    if (edge === 'north') {
+                        for (let c = 0; c < GRID_SIZE; c++) if (!simBoard[0][c]) points.push({ r: -1, c: c, dir: 'down' });
+                    }
+                    if (edge === 'south') {
+                        for (let c = 0; c < GRID_SIZE; c++) if (!simBoard[GRID_SIZE - 1][c]) points.push({ r: GRID_SIZE, c: c, dir: 'up' });
+                    }
+                    if (edge === 'west') {
+                        for (let r = 0; r < GRID_SIZE; r++) if (!simBoard[r][0]) points.push({ r: r, c: -1, dir: 'right' });
+                    }
+                    if (edge === 'east') {
+                        for (let r = 0; r < GRID_SIZE; r++) if (!simBoard[r][GRID_SIZE - 1]) points.push({ r: r, c: GRID_SIZE, dir: 'left' });
+                    }
+                });
+                return points;
+            }
+
+            // --- Execution ---
+
+            if (currentPhase === 1) {
+                let bestMove = { skip: true };
+                let maxVal = -Infinity;
+
+                let moves = [{ skip: true }];
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        if (board[r][c]) {
+                            [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dr, dc]) => {
+                                if (inBounds(r + dr, c + dc) && isEmpty(r + dr, c + dc)) moves.push({ r, c, dr, dc });
+                            });
+                        }
+                    }
+                }
+
+                for (const m of moves) {
+                    const nextB = m.skip ? cloneBoard(board) : simulateSlide(board, m.r, m.c, m.dr, m.dc, false, aiPlayerIdx);
+                    const val = minimax(nextB, 2, 2, aiPlayerIdx, -Infinity, Infinity);
+                    if (val > maxVal) {
+                        maxVal = val;
+                        bestMove = m;
+                    }
+                }
+
+                if (!bestMove.skip) {
+                    slidePiece(bestMove.r, bestMove.c, bestMove.dr, bestMove.dc).then(success => {
+                        if (success) advancePhase();
+                    });
+                } else {
+                    advancePhase();
+                }
+            } else if (currentPhase === 2) {
+                const entries = getValidEntryPoints(p);
+                let bestEntry = entries[0];
+                let maxVal = -Infinity;
+
+                for (const e of entries) {
+                    const dr = e.dir === 'down' ? 1 : e.dir === 'up' ? -1 : 0;
+                    const dc = e.dir === 'right' ? 1 : e.dir === 'left' ? -1 : 0;
+                    const nextB = simulateSlide(board, e.r, e.c, dr, dc, true, aiPlayerIdx);
+                    const val = evaluate(nextB, aiPlayerIdx);
+                    if (val > maxVal) {
+                        maxVal = val;
+                        bestEntry = e;
+                    }
+                }
+
+                if (bestEntry) {
+                    const dr = bestEntry.dir === 'down' ? 1 : bestEntry.dir === 'up' ? -1 : 0;
+                    const dc = bestEntry.dir === 'right' ? 1 : bestEntry.dir === 'left' ? -1 : 0;
+                    slidePiece(bestEntry.r, bestEntry.c, dr, dc, true).then(success => {
+                        if (success) endTurn();
+                    });
+                } else {
+                    endTurn();
+                }
+            }
+        }
+
 
         function endGame() {
             gameOver = true;
             let winner = players.reduce((prev, curr) => (prev.score > curr.score) ? prev : curr);
-            document.getElementById('action-lbl').innerHTML = `<span style="color:${winner.color}">Winner: Player ${winner.id + 1}!</span>`;
+            const winnerName = (isCPUMode && winner.id === 1) ? 'CPU' : `Player ${winner.id + 1}`;
+            document.getElementById('action-lbl').innerHTML = `<span style="color:${winner.color}">Winner: ${winnerName}!</span>`;
             document.getElementById('phase-lbl').textContent = "GAME OVER";
 
             const modal = document.getElementById('victory-modal');
             const winnerText = document.getElementById('winner-text');
             const finalScore = document.getElementById('final-score');
 
-            winnerText.textContent = `Player ${winner.id + 1} Wins!`;
+            winnerText.textContent = `${winnerName} Wins!`;
             winnerText.style.color = winner.color;
             finalScore.textContent = `Score: ${winner.score}`;
             modal.classList.add('visible');
@@ -913,7 +1142,9 @@
                         }
 
                         // Make piece clickable for selection
-                        pEl.onclick = () => handleBoardClick(r, c);
+                        pEl.onclick = () => {
+                            if (!players[currentPlayerIdx].isCPU) handleBoardClick(r, c);
+                        };
 
 
                         // Update position
@@ -922,7 +1153,7 @@
                         pEl.style.left = pos.left + 'px';
 
                         // Selected state
-                        if (currentPhase === 1 && selectedCell && selectedCell.r === r && selectedCell.c === c) {
+                        if (currentPhase === 1 && selectedCell && selectedCell.r === r && selectedCell.c === c && !players[currentPlayerIdx].isCPU) {
                             pEl.style.boxShadow = "0 0 25px white, 0 0 10px white";
                             pEl.style.border = "2px solid white";
                             pEl.style.zIndex = "10";
@@ -1077,7 +1308,9 @@
                 }
                 btn.style.top = top + 'px';
                 btn.style.left = left + 'px';
-                btn.onclick = () => handleEntryClick(pt);
+                btn.onclick = () => {
+                    if (!players[currentPlayerIdx].isCPU) handleEntryClick(pt);
+                };
                 layer.appendChild(btn);
             });
         }
@@ -1105,7 +1338,7 @@
                 }
 
                 card.innerHTML = `
-                    <strong style="color:${p.color}">Player ${idx + 1}</strong>
+                    <strong style="color:${p.color}">${p.isCPU ? 'CPU' : 'Player ' + (idx + 1)}</strong>
                     <div class="stats">
                         <span>Score: ${p.score}</span>
                         <span>Rsrv: ${p.reserve}</span>
@@ -1117,10 +1350,11 @@
 
         function updateUI() {
             if (gameOver || !players[currentPlayerIdx]) return;
+            const isCPU = players[currentPlayerIdx].isCPU;
             document.getElementById('phase-lbl').textContent = `Phase ${currentPhase}`;
             document.getElementById('action-lbl').textContent = currentPhase === 1 ? 'Shift Existing Piece' : 'Enter New Piece';
             document.getElementById('action-lbl').style.color = players[currentPlayerIdx].color;
-            document.getElementById('skip-btn').disabled = currentPhase !== 1;
+            document.getElementById('skip-btn').disabled = (currentPhase !== 1 || isCPU);
         }
 
         document.getElementById('skip-btn').onclick = () => { if (currentPhase === 1) advancePhase(); };
