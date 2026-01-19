@@ -28,11 +28,13 @@
             --player-cpu: #a855f7;
             --player-cpu-dim: #7c3aed;
             --throne: #d4af37;
-            --pin-indicator: #fbbf24; /* Bright amber/yellow for pinned pieces */
+            --pin-indicator: #fbbf24;
+            /* Bright amber/yellow for pinned pieces */
             --valid-move: rgba(100, 200, 100, 0.3);
             --damage-path: rgba(255, 165, 0, 0.5);
             --path-highlight: rgba(100, 150, 255, 0.4);
             --path-end-highlight: rgba(100, 150, 255, 0.6);
+            --shoot-path: rgba(255, 50, 50, 0.4);
         }
 
         * {
@@ -191,13 +193,11 @@
         .army-piece.pinned {
             border: 3px solid var(--pin-indicator);
             box-shadow: 0 0 8px var(--pin-indicator);
-            background: repeating-linear-gradient(
-                45deg,
-                transparent,
-                transparent 3px,
-                rgba(251, 191, 36, 0.15) 3px,
-                rgba(251, 191, 36, 0.15) 6px
-            );
+            background: repeating-linear-gradient(45deg,
+                    transparent,
+                    transparent 3px,
+                    rgba(251, 191, 36, 0.15) 3px,
+                    rgba(251, 191, 36, 0.15) 6px);
         }
 
         /* Board Area */
@@ -299,6 +299,11 @@
         .hex.throne.path-end {
             stroke: var(--accent-gold);
             stroke-width: 3;
+        }
+
+        .hex.shoot-path {
+            fill: var(--shoot-path);
+            stroke: var(--shoot-path);
         }
 
         .piece {
@@ -407,6 +412,17 @@
 
         .btn.rotate:hover {
             background: #e8c34a;
+        }
+
+        .btn.alt-move {
+            background: #2563eb;
+            color: white;
+            border-color: #1d4ed8;
+            font-weight: 500;
+        }
+
+        .btn.alt-move:hover {
+            background: #1d4ed8;
         }
 
         .btn.auto-move {
@@ -848,7 +864,8 @@
             KNIGHT: { symbol: '♞', name: 'Knight', defaultHP: 4, isKing: false },
             ROOK: { symbol: '♜', name: 'Rook', defaultHP: 6, isKing: false },
             BISHOP: { symbol: '♝', name: 'Bishop', defaultHP: 4, isKing: false },
-            LANCE: { symbol: '⚔', name: 'Lance', defaultHP: 4, isKing: false },
+            BISHOP: { symbol: '♝', name: 'Bishop', defaultHP: 4, isKing: false },
+            ARCHER: { symbol: '☾', name: 'Archer', defaultHP: 4, isKing: false },
         };
 
         // Game state
@@ -878,7 +895,9 @@
                 actionsPerTurn: 2
             },
             unitConfigs: {},
-            turnSnapshot: null
+            turnSnapshot: null,
+            lanceTargetingMode: false,
+            lanceTargetingRays: []
         };
 
         // Movement templates
@@ -924,8 +943,8 @@
                 hp: 4,
                 ramDamage: 2
             };
-            // Lance: free motion
-            gameState.unitConfigs['LANCE'] = {
+            // Archer: free motion
+            gameState.unitConfigs['ARCHER'] = {
                 range: 1,
                 template: MOVEMENT_TEMPLATES.FREE_MOTION,
                 hp: 4,
@@ -1247,7 +1266,7 @@
             }
 
             if (lancePosition) {
-                createPiece('LANCE', player, lancePosition.q, lancePosition.r);
+                createPiece('ARCHER', player, lancePosition.q, lancePosition.r);
             }
 
             // Verify all pieces were created
@@ -1258,7 +1277,7 @@
                 KNIGHT: pieces.filter(p => p.type === 'KNIGHT').length,
                 ROOK: pieces.filter(p => p.type === 'ROOK').length,
                 BISHOP: pieces.filter(p => p.type === 'BISHOP').length,
-                LANCE: pieces.filter(p => p.type === 'LANCE').length
+                ARCHER: pieces.filter(p => p.type === 'ARCHER').length
             };
 
             // Ensure we have all required pieces, create missing ones if needed
@@ -1283,11 +1302,11 @@
                     }
                 }
             }
-            if (pieceCounts.LANCE === 0) {
+            if (pieceCounts.ARCHER === 0) {
                 const allRing2 = getHexesInRing(2);
                 for (const hex of allRing2) {
                     if (!getPieceAt(hex.q, hex.r)) {
-                        createPiece('LANCE', player, hex.q, hex.r);
+                        createPiece('ARCHER', player, hex.q, hex.r);
                         break;
                     }
                 }
@@ -1306,7 +1325,8 @@
                 hp,
                 maxHP: hp,
                 alive: true,
-                pinned: false
+                pinned: false,
+                altMoveUnlocked: false
             };
 
             gameState.pieces.push(piece);
@@ -1322,7 +1342,7 @@
 
             // Create defs for patterns
             const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-            
+
             // Diagonal stripe pattern for pinned pieces
             const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
             pattern.setAttribute('id', 'pin-stripes');
@@ -1330,14 +1350,14 @@
             pattern.setAttribute('width', '8');
             pattern.setAttribute('height', '8');
             pattern.setAttribute('patternTransform', 'rotate(45)');
-            
+
             const line = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             line.setAttribute('x', '0');
             line.setAttribute('y', '0');
             line.setAttribute('width', '4');
             line.setAttribute('height', '8');
             line.setAttribute('fill', 'rgba(251, 191, 36, 0.4)'); // Semi-transparent amber
-            
+
             pattern.appendChild(line);
             defs.appendChild(pattern);
             svg.appendChild(defs);
@@ -1479,16 +1499,59 @@
                     g.appendChild(stripeOverlay);
                 }
 
-                // Piece symbol
-                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                text.setAttribute('x', x);
-                text.setAttribute('y', y + 6);
-                text.setAttribute('text-anchor', 'middle');
-                text.setAttribute('font-size', '24');
-                text.setAttribute('fill', 'white');
-                text.setAttribute('pointer-events', 'none');
-                text.textContent = PIECE_TYPES[piece.type].symbol;
-                g.appendChild(text);
+                if (piece.type === 'ARCHER') {
+                    // Use SVG paths for cleaner, non-emoji look
+                    const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+                    // Center the icon
+                    iconGroup.setAttribute('transform', `translate(${x}, ${y}) scale(1.2)`);
+
+                    if (piece.altMoveUnlocked) {
+                        // Unlocked: Bow and Arrow
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        // Bow (curve) + Arrow (line + head)
+                        path.setAttribute('d', 'M 3 -8 Q -6 0 3 8 M -6 0 L 8 0 M 4 -3 L 8 0 L 4 3');
+                        path.setAttribute('stroke', 'white');
+                        path.setAttribute('stroke-width', '2');
+                        path.setAttribute('fill', 'none');
+                        path.setAttribute('stroke-linecap', 'round');
+                        path.setAttribute('stroke-linejoin', 'round');
+                        iconGroup.appendChild(path);
+                    } else {
+                        // Locked: Bow only
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        // Bow (curve)
+                        path.setAttribute('d', 'M 3 -8 Q -6 0 3 8');
+                        path.setAttribute('stroke', 'white');
+                        path.setAttribute('stroke-width', '2');
+                        path.setAttribute('fill', 'none');
+                        path.setAttribute('stroke-linecap', 'round');
+                        iconGroup.appendChild(path);
+
+                        // Add a small cross or lock indicator? 
+                        // User said "arrowless bow", so maybe just the bow is enough.
+                        // Maybe add a string?
+                        const string = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        string.setAttribute('d', 'M 3 -8 L 3 8');
+                        string.setAttribute('stroke', 'white');
+                        string.setAttribute('stroke-width', '1');
+                        string.setAttribute('stroke-dasharray', '2.5, 2.5'); // Dashed string to look inactive?
+                        string.setAttribute('opacity', '0.7');
+                        iconGroup.appendChild(string);
+                    }
+                    iconGroup.setAttribute('pointer-events', 'none');
+                    g.appendChild(iconGroup); // Append group instead of text
+                } else {
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', x);
+                    text.setAttribute('y', y + 6);
+                    text.setAttribute('text-anchor', 'middle');
+                    text.setAttribute('font-size', '24');
+                    text.setAttribute('fill', 'white');
+                    text.setAttribute('pointer-events', 'none');
+                    text.textContent = PIECE_TYPES[piece.type].symbol;
+                    g.appendChild(text);
+                }
 
                 // Stats indicators
                 const config = gameState.unitConfigs[piece.type];
@@ -1563,14 +1626,139 @@
         }
 
         function clearHighlights() {
-            document.querySelectorAll('.hex.valid-move, .hex.damage-path, .hex.selected, .hex.path-step, .hex.path-end').forEach(el => {
-                el.classList.remove('valid-move', 'damage-path', 'selected', 'path-step', 'path-end');
+            document.querySelectorAll('.hex.valid-move, .hex.damage-path, .hex.selected, .hex.path-step, .hex.path-end, .hex.shoot-path').forEach(el => {
+                el.classList.remove('valid-move', 'damage-path', 'selected', 'path-step', 'path-end', 'shoot-path');
             });
         }
 
         // ============================================
         // GAME LOGIC
         // ============================================
+
+        // ============================================
+        // LANCE SPECIAL ABILITY
+        // ============================================
+
+        function enterLanceTargetingMode(pieceIndex) {
+            gameState.lanceTargetingMode = true;
+            gameState.pathBuilding = false; // Disable path building
+
+            // Calculate valid rays
+            calculateLanceRays(pieceIndex);
+
+            // Draw visualization
+            drawLanceTargetingVisualization();
+
+            // Show cancel button
+            document.getElementById('btn-cancel-path').style.display = 'inline-block';
+            document.getElementById('btn-rotate').style.display = 'none'; // Hide the button itself
+
+            addLog('Select a direction for Arrow Shot', 'system');
+        }
+
+        function exitLanceTargetingMode() {
+            gameState.lanceTargetingMode = false;
+            gameState.lanceTargetingRays = [];
+            clearHighlights();
+        }
+
+        function calculateLanceRays(pieceIndex) {
+            const piece = gameState.pieces[pieceIndex];
+            gameState.lanceTargetingRays = [];
+
+            // 6 Directions
+            for (let dir = 0; dir < 6; dir++) {
+                const ray = [];
+                let current = { q: piece.q, r: piece.r };
+                let hitUnit = null;
+
+                // Trace ray
+                for (let dist = 1; dist <= 10; dist++) { // Max board size roughly
+                    const next = hexNeighbor(current.q, current.r, dir);
+
+                    if (!isValidHex(next.q, next.r)) break;
+
+                    ray.push({ q: next.q, r: next.r });
+                    current = next;
+
+                    // Check for hit
+                    const unit = getPieceAt(next.q, next.r);
+                    if (unit && unit.alive) {
+                        hitUnit = unit;
+                        break; // Stop at first unit
+                    }
+                }
+
+                if (ray.length > 0) {
+                    gameState.lanceTargetingRays.push({
+                        dir: dir,
+                        path: ray,
+                        hitUnit: hitUnit
+                    });
+                }
+            }
+        }
+
+        function drawLanceTargetingVisualization() {
+            clearHighlights();
+
+            // Highlight all ray paths
+            gameState.lanceTargetingRays.forEach(rayData => {
+                rayData.path.forEach(pos => {
+                    const hex = document.querySelector(`.hex[data-q="${pos.q}"][data-r="${pos.r}"]`);
+                    if (hex) {
+                        hex.classList.add('shoot-path');
+                        // Add data attribute for click handling
+                        hex.dataset.shootDir = rayData.dir;
+                    }
+                });
+
+                // Highlight target if enemy
+                if (rayData.hitUnit && rayData.hitUnit.player !== gameState.currentPlayer) {
+                    const hex = document.querySelector(`.hex[data-q="${rayData.hitUnit.q}"][data-r="${rayData.hitUnit.r}"]`);
+                    if (hex) hex.classList.add('damage-path');
+                }
+            });
+        }
+
+        function handleLanceTargetingClick(q, r) {
+            // Check if clicked hex is part of any ray
+            const clickedRay = gameState.lanceTargetingRays.find(ray =>
+                ray.path.some(step => step.q === q && step.r === r)
+            );
+
+            if (clickedRay) {
+                executeLanceShot(clickedRay);
+            } else {
+                // Clicked outside - cancel
+                cancelPathBuilding();
+            }
+        }
+
+        function executeLanceShot(rayData) {
+            const piece = gameState.pieces[gameState.selectedPiece];
+            const hitUnit = rayData.hitUnit;
+
+            addLog(`${PIECE_TYPES[piece.type].name} fires Arrow!`, piece.player);
+
+            if (hitUnit) {
+                if (hitUnit.player !== piece.player) {
+                    // Hit enemy - Deal 3 damage
+                    addLog(`Arrow hits ${PIECE_TYPES[hitUnit.type].name} for 3 damage!`, 'system');
+                    applyDamage(hitUnit, 3, gameState.selectedPiece);
+                    updatePins(); // Check logic after damage
+                    checkArmyElimination();
+                } else {
+                    // Hit ally - 0 damage
+                    addLog(`Arrow hits ally ${PIECE_TYPES[hitUnit.type].name} (0 damage).`, 'system');
+                }
+            } else {
+                addLog(`Arrow missed!`, 'system');
+            }
+
+            useAction(gameState.selectedPiece);
+            cancelPathBuilding(); // Deselect and exit mode
+        }
 
         function getValidMoves(piece) {
             if (!piece.alive || piece.pinned) return [];
@@ -1904,7 +2092,7 @@
 
             // Check if destination would die (using same logic as applyDamage)
             let wouldKill = false;
-            
+
             // Check if target would still be pinned without attacker
             if (destAfterSimulation.pinned && attackerIndex !== null) {
                 const stillPinnedWithoutAttacker = isStillPinnedWithoutAttacker(destAfterSimulation, attackerIndex);
@@ -2003,6 +2191,14 @@
             piece.q = targetQ;
             piece.r = targetR;
 
+            // Check for Archer Ascension (reaching outer ring)
+            if (piece.type === 'ARCHER' && !piece.altMoveUnlocked) {
+                if (getRing(targetQ, targetR) === BOARD_RADIUS) {
+                    piece.altMoveUnlocked = true;
+                    addLog('ARCHER reached the edge! Shoot Arrow Unlocked.', 'system');
+                }
+            }
+
             addLog(`${piece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[piece.type].name} moves to (${targetQ}, ${targetR})`, piece.player);
 
             // Check victory
@@ -2028,7 +2224,7 @@
             // Find target index using coordinates instead of reference (more reliable)
             const targetIndex = gameState.pieces.findIndex(p => p.q === targetPiece.q && p.r === targetPiece.r);
             if (targetIndex < 0) return false;
-            
+
             // If attacker is the target itself, removing attacker removes target, so target can't be pinned
             if (targetIndex === attackerIndex) return false;
 
@@ -2144,13 +2340,13 @@
         function applyDamage(piece, damage, attackerIndex = null) {
             // Find the piece index using coordinates (more reliable than indexOf)
             const pieceIndex = gameState.pieces.findIndex(p => p.q === piece.q && p.r === piece.r);
-            
+
             // If piece not found, return early
             if (pieceIndex < 0) {
                 console.error('applyDamage: piece not found at', piece.q, piece.r);
                 return;
             }
-            
+
             // Use the actual piece from gameState.pieces to ensure we modify the right object
             const actualPiece = gameState.pieces[pieceIndex];
 
@@ -2595,7 +2791,7 @@
             const paths = [];
             // Use provided pinningPlayer or default to currentPlayer for backwards compatibility
             const activePlayer = pinningPlayer !== null ? pinningPlayer : gameState.currentPlayer;
-            const enemies = gameState.pieces.filter(p => 
+            const enemies = gameState.pieces.filter(p =>
                 p.alive && p.player !== activePlayer
             );
 
@@ -2926,6 +3122,7 @@
 
             if (gameState.pathBuilding) cancelPathBuilding();
             if (gameState.rotationMode) exitRotationMode();
+            if (gameState.lanceTargetingMode) exitLanceTargetingMode();
 
             updatePins();
             updateUI();
@@ -2948,6 +3145,12 @@
                 return;
             }
 
+            // Lance targeting mode
+            if (gameState.lanceTargetingMode) {
+                handleLanceTargetingClick(q, r);
+                return;
+            }
+
             // Path building mode
             if (gameState.pathBuilding && gameState.pathStartPiece !== null) {
                 const piece = gameState.pieces[gameState.pathStartPiece];
@@ -2959,11 +3162,11 @@
                     gameState.currentPath.push({ q, r });
                     updatePathVisualization();
                 } else {
-                    // Check if clicking the last step again (confirm move)
+                    // Check if clicking the last step again
                     if (gameState.currentPath.length > 0) {
                         const last = gameState.currentPath[gameState.currentPath.length - 1];
                         if (last.q === q && last.r === r) {
-                            confirmPathMove();
+                            // Do nothing - user must click Confirm Move button
                             return;
                         }
                     }
@@ -2991,6 +3194,12 @@
             // In rotation mode, treat piece clicks same as hex clicks - select the ring
             if (gameState.rotationMode) {
                 handleRotationClick(piece.q, piece.r);
+                return;
+            }
+
+            // In lance targeting mode, clicking on a piece might be a valid target selection
+            if (gameState.lanceTargetingMode) {
+                handleLanceTargetingClick(piece.q, piece.r);
                 return;
             }
 
@@ -3039,10 +3248,31 @@
             gameState.currentPath = [];
             gameState.selectedPiece = pieceIndex;
 
-            // Show rotate button if King (and not pinned)
+            // Show Alt Move button for power pieces (King, Knight, Rook, Bishop, Lance)
+            // Power pieces are everyone except Pawns
             const rotateBtn = document.getElementById('btn-rotate');
-            if (PIECE_TYPES[piece.type].isKing && !piece.pinned) {
+            if (piece.type !== 'PAWN' && !piece.pinned) {
                 rotateBtn.style.display = 'flex';
+                // Unified style for all power pieces as requested
+                rotateBtn.className = 'btn alt-move';
+
+                // Reset disabled state default
+                rotateBtn.disabled = false;
+                rotateBtn.style.opacity = '1';
+                rotateBtn.style.cursor = 'pointer';
+
+                if (PIECE_TYPES[piece.type].isKing) {
+                    rotateBtn.innerHTML = '⚡ Rotate Ring';
+                } else if (piece.type === 'ARCHER') {
+                    rotateBtn.innerHTML = '⚡ Shoot Arrow';
+                    if (!piece.altMoveUnlocked) {
+                        rotateBtn.disabled = true;
+                        rotateBtn.style.opacity = '0.5';
+                        rotateBtn.style.cursor = 'not-allowed';
+                    }
+                } else {
+                    rotateBtn.innerHTML = '⚡ Alt Move';
+                }
             } else {
                 rotateBtn.style.display = 'none';
             }
@@ -3057,6 +3287,11 @@
             gameState.pathStartPiece = null;
             gameState.selectedPiece = null;
             gameState.previewPinningPaths = []; // Clear preview pinning
+
+            if (gameState.lanceTargetingMode) {
+                exitLanceTargetingMode();
+            }
+
             clearHighlights();
             renderPieces();
             renderPinningPaths(); // Re-render to clear preview paths
@@ -3162,7 +3397,7 @@
                     path: gameState.currentPath
                 };
                 const ramDamage = gameState.unitConfigs[piece.type].ramDamage;
-                
+
                 if (!simulateMoveAndValidate(gameState.pathStartPiece, destination.q, destination.r, move, ramDamage)) {
                     addLog('Cannot land on enemy that would survive!', 'system');
                     return;
@@ -3330,7 +3565,27 @@
 
                     if (!piece.alive) div.classList.add('dead');
                     if (piece.pinned) div.classList.add('pinned');
-                    div.textContent = PIECE_TYPES[piece.type].symbol;
+
+                    if (piece.type === 'ARCHER') {
+                        // Use inline SVG for army display
+                        const svgSize = 20;
+                        const svgContent = piece.altMoveUnlocked
+                            ? `<svg width="${svgSize}" height="${svgSize}" viewBox="-10 -10 20 20" style="vertical-align: middle; fill: none; stroke: ${piece.pinned ? '#5a5a5a' : 'white'}; stroke-width: 2;">
+                                 <path d="M 3 -7 Q -6 0 3 7 M -6 0 L 7 0 M 3 -3 L 7 0 L 3 3" stroke-linecap="round" stroke-linejoin="round"/>
+                               </svg>`
+                            : `<svg width="${svgSize}" height="${svgSize}" viewBox="-10 -10 20 20" style="vertical-align: middle; fill: none; stroke: ${piece.pinned ? '#5a5a5a' : 'white'}; stroke-width: 2;">
+                                 <path d="M 3 -7 Q -6 0 3 7" stroke-linecap="round"/>
+                                 <path d="M 3 -7 L 3 7" stroke-width="1" stroke-dasharray="2,2" opacity="0.7"/>
+                               </svg>`;
+                        div.innerHTML = svgContent;
+                        // Center flex if not already
+                        div.style.display = 'flex';
+                        div.style.alignItems = 'center';
+                        div.style.justifyContent = 'center';
+                    } else {
+                        div.textContent = PIECE_TYPES[piece.type].symbol;
+                    }
+
                     div.title = `${PIECE_TYPES[piece.type].name} HP: ${piece.hp}`;
                     container.appendChild(div);
                 });
@@ -3530,6 +3785,8 @@
             gameState.rotationMode = false;
             gameState.selectedRing = null;
             gameState.pathBuilding = false;
+            gameState.lanceTargetingMode = false;
+            gameState.lanceTargetingRays = [];
             gameState.currentPath = [];
             gameState.pathStartPiece = null;
             gameState.pinningPaths = [];
@@ -4075,6 +4332,8 @@
                         exitRotationMode();
                     } else if (gameState.pathBuilding) {
                         cancelPathBuilding();
+                    } else if (gameState.lanceTargetingMode) {
+                        cancelPathBuilding();
                     } else {
                         gameState.selectedPiece = null;
                         gameState.validMoves = [];
@@ -4119,11 +4378,25 @@
             document.getElementById('btn-rotate').addEventListener('click', () => {
                 if (gameState.selectedPiece !== null) {
                     const piece = gameState.pieces[gameState.selectedPiece];
-                    if (PIECE_TYPES[piece.type].isKing && piece.player === gameState.currentPlayer && !piece.pinned) {
+
+                    if (piece.pinned) {
+                        addLog('Pinned pieces cannot move or take actions!', 'system');
+                        return;
+                    }
+
+                    if (piece.player !== gameState.currentPlayer) return;
+
+                    if (PIECE_TYPES[piece.type].isKing) {
                         enterRotationMode(gameState.selectedPiece);
                         document.getElementById('btn-rotate').style.display = 'none';
-                    } else if (piece.pinned) {
-                        addLog('Pinned pieces cannot move or take actions!', 'system');
+                    } else if (piece.type === 'ARCHER') {
+                        enterLanceTargetingMode(gameState.selectedPiece);
+                    } else if (piece.type !== 'PAWN') {
+                        // Execute Alt Move for other power pieces
+                        // For now, just consumes an action
+                        addLog(`${PIECE_TYPES[piece.type].name} uses Alt Move (Pass)`, piece.player);
+                        useAction(gameState.selectedPiece);
+                        cancelPathBuilding(); // Deselect after action
                     }
                 }
             });
