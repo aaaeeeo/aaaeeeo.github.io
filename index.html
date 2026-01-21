@@ -269,6 +269,41 @@
             stroke-width: 2;
         }
 
+        .hex.force-field {
+            fill: rgba(147, 51, 234, 0.05);
+            /* Removed !important to allow path highlights to override if needed, 
+               but path highlights don't usually set stroke-width this high, so maybe keep it?
+               Actually, path-step sets stroke. If we want path stroke to win, we must remove !important.
+               But if we want force field border + path fill, we can keep !important stroke?
+               User said: "moving... inside... should still show these [path highlights]".
+               Path highlights are primarily FILL (blue/green).
+               Path OUTLINE is also blue.
+               If we allow Blue Stroke to win, the purple border vanishes on path cells.
+               Let's try removing !important so standard cascade works.
+            */
+            stroke: #d8b4fe;
+            stroke-width: 3px;
+            filter: drop-shadow(0 0 5px rgba(168, 85, 247, 0.8));
+            animation: forceFieldPulse 2s infinite;
+        }
+
+        @keyframes forceFieldPulse {
+            0% {
+                stroke: #d8b4fe;
+                stroke-width: 3px;
+            }
+
+            50% {
+                stroke: #e9d5ff;
+                stroke-width: 5px;
+            }
+
+            100% {
+                stroke: #d8b4fe;
+                stroke-width: 3px;
+            }
+        }
+
         .hex.valid-move {
             fill: var(--valid-move);
         }
@@ -305,6 +340,8 @@
             fill: var(--shoot-path);
             stroke: var(--shoot-path);
         }
+
+
 
         .piece {
             cursor: pointer;
@@ -893,8 +930,11 @@
             },
             unitConfigs: {},
             turnSnapshot: null,
+            unitConfigs: {},
+            turnSnapshot: null,
             lanceTargetingMode: false,
-            lanceTargetingRays: []
+            lanceTargetingRays: [],
+            forceFields: [] // {q, r, player} - Rooks create these
         };
 
         // Movement templates
@@ -1598,6 +1638,7 @@
             if (svg && pieceGroup.parentNode === svg) {
                 svg.appendChild(pieceGroup);
             }
+            updateForceFieldVisuals();
         }
 
         function highlightValidMoves(moves) {
@@ -1674,6 +1715,15 @@
                     const next = hexNeighbor(current.q, current.r, dir);
 
                     if (!isValidHex(next.q, next.r)) break;
+
+                    // Barrier Check for Projectile
+                    const isCurrentInside = isInsideForceField(current.q, current.r);
+                    const isNextInside = isInsideForceField(next.q, next.r);
+
+                    if (isCurrentInside !== isNextInside) {
+                        // Ray blocked by field
+                        break;
+                    }
 
                     ray.push({ q: next.q, r: next.r });
                     current = next;
@@ -1918,6 +1968,45 @@
             }));
         }
 
+        function isInsideForceField(q, r) {
+            return gameState.forceFields.some(field => {
+                return hexDistance(q, r, field.q, field.r) <= 1;
+            });
+        }
+
+        function updateForceFieldVisuals() {
+            // Clear existing
+            document.querySelectorAll('.hex.force-field').forEach(el => el.classList.remove('force-field'));
+
+            // Apply new
+            gameState.forceFields.forEach(field => {
+                const center = { q: field.q, r: field.r };
+                // Get all hexes in range 1
+                const hexes = [center];
+                for (let i = 0; i < 6; i++) {
+                    hexes.push(hexNeighbor(center.q, center.r, i));
+                }
+
+                hexes.forEach(pos => {
+                    const hex = document.querySelector(`.hex[data-q="${pos.q}"][data-r="${pos.r}"]`);
+                    if (hex) hex.classList.add('force-field');
+                });
+            });
+        }
+
+        function activateForceField(pieceIndex) {
+            const piece = gameState.pieces[pieceIndex];
+            gameState.forceFields.push({
+                q: piece.q,
+                r: piece.r,
+                player: piece.player
+            });
+
+            addLog(`${PIECE_TYPES[piece.type].name} activates Force Field!`, piece.player);
+            useAction(pieceIndex);
+            cancelPathBuilding(); // This calls renderPieces which calls updateForceFieldVisuals
+        }
+
         function getValidNextSteps(piece, currentPath) {
             // Pinned pieces cannot move
             if (!piece.alive || piece.pinned) return [];
@@ -1984,6 +2073,14 @@
                 const next = hexNeighbor(currentPos.q, currentPos.r, dir);
 
                 if (!isValidHex(next.q, next.r)) return;
+
+                // Force Field Check (Universal)
+                const isCurrentInside = isInsideForceField(currentPos.q, currentPos.r);
+                const isNextInside = isInsideForceField(next.q, next.r);
+                // Cannot exit if inside, Cannot enter if outside.
+                if (isCurrentInside !== isNextInside) {
+                    return; // Blocked
+                }
 
                 // Check if already in path (can't backtrack)
                 const alreadyInPath = currentPath.some(step => step.q === next.q && step.r === next.r);
@@ -3038,6 +3135,10 @@
 
             gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
 
+            // Expire Force Fields: Remove fields belonging to the player who is about to start their turn
+            // (Meaning they lasted through the enemy's turn)
+            gameState.forceFields = gameState.forceFields.filter(f => f.player !== gameState.currentPlayer);
+
             // After the first turn, all players get 2 actions
             if (gameState.isFirstTurn) {
                 gameState.isFirstTurn = false;
@@ -3102,7 +3203,8 @@
             gameState.turnSnapshot = {
                 pieces: JSON.parse(JSON.stringify(gameState.pieces)),
                 actionsRemaining: gameState.actionsRemaining,
-                hasAnyPieceMoved: gameState.hasAnyPieceMoved
+                hasAnyPieceMoved: gameState.hasAnyPieceMoved,
+                forceFields: JSON.parse(JSON.stringify(gameState.forceFields))
             };
         }
 
@@ -3121,10 +3223,19 @@
             if (gameState.rotationMode) exitRotationMode();
             if (gameState.lanceTargetingMode) exitLanceTargetingMode();
 
+            gameState.forceFields = []; // Reset force fields on turn reset (simple approach) or restore from snapshot if we added it?
+            // Snapshot doesn't have forceFields yet. We should add it to snapshot.
+            if (gameState.turnSnapshot && gameState.turnSnapshot.forceFields) {
+                gameState.forceFields = JSON.parse(JSON.stringify(gameState.turnSnapshot.forceFields));
+            } else {
+                gameState.forceFields = [];
+            }
+
             updatePins();
             updateUI();
             updateArmyDisplay();
             clearHighlights();
+            updateForceFieldVisuals();
             renderPieces();
 
             addLog(`Turn reset to start of Player ${gameState.currentPlayer}'s turn.`, 'system');
@@ -3267,6 +3378,8 @@
                         rotateBtn.style.opacity = '0.5';
                         rotateBtn.style.cursor = 'not-allowed';
                     }
+                } else if (piece.type === 'ROOK') {
+                    rotateBtn.innerHTML = '⚡ Force Field';
                 } else {
                     rotateBtn.innerHTML = '⚡ Alt Move';
                 }
@@ -3908,6 +4021,8 @@
                         document.getElementById('btn-rotate').style.display = 'none';
                     } else if (piece.type === 'ARCHER') {
                         enterLanceTargetingMode(gameState.selectedPiece);
+                    } else if (piece.type === 'ROOK') {
+                        activateForceField(gameState.selectedPiece);
                     } else if (piece.type !== 'PAWN') {
                         // Execute Alt Move for other power pieces
                         // For now, just consumes an action
