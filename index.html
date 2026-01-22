@@ -1803,7 +1803,7 @@
                 addLog(`Arrow missed!`, 'system');
             }
 
-            useAction(gameState.selectedPiece);
+            useAction(gameState.selectedPiece, 'ALT');
             cancelPathBuilding(); // Deselect and exit mode
         }
 
@@ -2003,7 +2003,8 @@
             });
 
             addLog(`${PIECE_TYPES[piece.type].name} activates Force Field!`, piece.player);
-            useAction(pieceIndex);
+            addLog(`${PIECE_TYPES[piece.type].name} activates Force Field!`, piece.player);
+            useAction(pieceIndex, 'ALT');
             cancelPathBuilding(); // This calls renderPieces which calls updateForceFieldVisuals
         }
 
@@ -3106,10 +3107,47 @@
             addLog(`VICTORY: ${reasons[reason]}`, 'system');
         }
 
-        function useAction(pieceIndex) {
-            gameState.usedPieces.add(pieceIndex);
+        function getPieceActionHistory(pieceIndex) {
+            if (!gameState.turnHistory.has(pieceIndex)) {
+                gameState.turnHistory.set(pieceIndex, new Set());
+            }
+            return gameState.turnHistory.get(pieceIndex);
+        }
+
+        function canPiecePerformAction(pieceIndex, actionType) {
+            const piece = gameState.pieces[pieceIndex];
+            const history = getPieceActionHistory(pieceIndex);
+
+            if (piece.type === 'PAWN') {
+                return history.size === 0;
+            }
+
+            return !history.has(actionType);
+        }
+
+        function isPieceFullyUsed(pieceIndex) {
+            const piece = gameState.pieces[pieceIndex];
+            const history = getPieceActionHistory(pieceIndex);
+
+            if (piece.type === 'PAWN') {
+                return history.size > 0;
+            }
+
+            // Other pieces can move and alt-move
+            return history.has('MOVE') && history.has('ALT');
+        }
+
+        function useAction(pieceIndex, actionType = 'MOVE') {
+            const history = getPieceActionHistory(pieceIndex);
+            history.add(actionType);
+
+            if (isPieceFullyUsed(pieceIndex)) {
+                gameState.usedPieces.add(pieceIndex);
+            }
+
             gameState.hasAnyPieceMoved = true;
             gameState.actionsRemaining--;
+
             updateUI();
             updateAutoMoveVisibility();
 
@@ -3132,6 +3170,7 @@
             gameState.pinningPaths = [];
             gameState.pinningMap.clear();
             gameState.previewPinningPaths = []; // Clear preview pinning
+            gameState.turnHistory.clear();
 
             gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
 
@@ -3332,7 +3371,7 @@
             selectUnitForEdit(piece.type);
 
             // Select own piece - start path building
-            if (piece.player === gameState.currentPlayer && !gameState.usedPieces.has(index)) {
+            if (piece.player === gameState.currentPlayer && !isPieceFullyUsed(index)) {
                 // Pinned pieces cannot be selected
                 if (piece.pinned) {
                     addLog('Pinned pieces cannot move or take actions!', 'system');
@@ -3383,6 +3422,14 @@
                 } else {
                     rotateBtn.innerHTML = '⚡ Alt Move';
                 }
+
+                // Disable if Alt action already used
+                if (!canPiecePerformAction(pieceIndex, 'ALT')) {
+                    rotateBtn.disabled = true;
+                    rotateBtn.style.opacity = '0.5';
+                    rotateBtn.style.cursor = 'not-allowed';
+                    rotateBtn.title = 'Alt action already used this turn';
+                }
             } else {
                 rotateBtn.style.display = 'none';
             }
@@ -3413,6 +3460,13 @@
 
         function updatePathVisualization() {
             if (!gameState.pathBuilding || gameState.pathStartPiece === null) return;
+
+            // Only show move path if piece can still Move
+            const canMove = canPiecePerformAction(gameState.pathStartPiece, 'MOVE');
+            if (!canMove) {
+                clearHighlights();
+                return;
+            }
 
             const piece = gameState.pieces[gameState.pathStartPiece];
             const validNext = getValidNextSteps(piece, gameState.currentPath);
@@ -3531,7 +3585,7 @@
                 return;
             }
 
-            useAction(gameState.pathStartPiece);
+            useAction(gameState.pathStartPiece, 'MOVE');
 
             // Clean up
             cancelPathBuilding();
@@ -3556,7 +3610,7 @@
                 if (gameState.selectedRing) {
                     executeRotation(gameState.selectedRing, true);
                     exitRotationMode();
-                    useAction(gameState.selectedPiece);
+                    useAction(gameState.selectedPiece, 'ALT');
                     gameState.selectedPiece = null;
                     updateArmyDisplay(); // Update army panel to reflect new pinning status
                     renderPieces();
@@ -3567,7 +3621,7 @@
                 if (gameState.selectedRing) {
                     executeRotation(gameState.selectedRing, false);
                     exitRotationMode();
-                    useAction(gameState.selectedPiece);
+                    useAction(gameState.selectedPiece, 'ALT');
                     gameState.selectedPiece = null;
                     updateArmyDisplay(); // Update army panel to reflect new pinning status
                     renderPieces();
@@ -3900,7 +3954,10 @@
             gameState.currentPath = [];
             gameState.pathStartPiece = null;
             gameState.pinningPaths = [];
+            gameState.pinningPaths = [];
             gameState.pinningMap.clear();
+            gameState.forceFields = [];
+            gameState.turnHistory = new Map(); // pieceIndex -> Set<ActionType>
 
             // Hide modals
             document.getElementById('victory-modal').classList.remove('active');
@@ -4027,7 +4084,7 @@
                         // Execute Alt Move for other power pieces
                         // For now, just consumes an action
                         addLog(`${PIECE_TYPES[piece.type].name} uses Alt Move (Pass)`, piece.player);
-                        useAction(gameState.selectedPiece);
+                        useAction(gameState.selectedPiece, 'ALT');
                         cancelPathBuilding(); // Deselect after action
                     }
                 }
