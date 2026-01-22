@@ -811,13 +811,7 @@
 
         <!-- Right Panel - Parameters -->
         <div class="panel panel-right">
-            <div class="panel-title">Game Parameters</div>
-            <div class="param-section">
-                <div class="param-row">
-                    <span class="param-label">Actions/Turn</span>
-                    <input type="number" class="param-input" id="param-actions" value="2" min="1" max="4">
-                </div>
-            </div>
+
 
             <div class="panel-title" style="margin-top: 16px;">Unit Editor</div>
             <div class="unit-editor">
@@ -3823,7 +3817,29 @@
                 const btn = document.createElement('button');
                 btn.className = 'unit-btn';
                 btn.dataset.type = type;
-                btn.textContent = info.symbol;
+
+                if (type === 'ARCHER') {
+                    // Use loaded bow SVG for clear icon
+                    btn.innerHTML = `<svg width="24" height="24" viewBox="-10 -10 20 20" style="vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2;">
+                                 <path d="M 3 -7 Q -6 0 3 7 M -6 0 L 7 0 M 3 -3 L 7 0 L 3 3" stroke-linecap="round" stroke-linejoin="round"/>
+                               </svg>`;
+                    btn.style.display = 'flex';
+                    btn.style.alignItems = 'center';
+                    btn.style.justifyContent = 'center';
+                } else if (type === 'ROOK') {
+                    // Use Kite Shield SVG
+                    btn.innerHTML = `<svg width="24" height="24" viewBox="-10 -10 20 20" style="vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
+                            <path d="M -6 -7 H 6 L 6 -1 Q 6 6 0 9 Q -6 6 -6 -1 Z" stroke-width="2"/>
+                            <path d="M 0 -7 L 0 9" stroke-width="1.5"/>
+                            <path d="M -5.5 -2 L 5.5 -2" stroke-width="1"/>
+                        </svg>`;
+                    btn.style.display = 'flex';
+                    btn.style.alignItems = 'center';
+                    btn.style.justifyContent = 'center';
+                } else {
+                    btn.textContent = info.symbol;
+                }
+
                 btn.title = info.name;
                 btn.addEventListener('click', () => selectUnitForEdit(type));
                 selector.appendChild(btn);
@@ -3963,14 +3979,7 @@
         // PARAMETERS
         // ============================================
 
-        function setupParams() {
-            document.getElementById('param-actions').addEventListener('change', (e) => {
-                gameState.params.actionsPerTurn = parseInt(e.target.value);
-                gameState.actionsRemaining = gameState.params.actionsPerTurn;
-                saveTurnSnapshot();
-                updateUI();
-            });
-        }
+
 
         // ============================================
         // GAME CONTROLS
@@ -4094,7 +4103,7 @@
             initUnitConfigs();
             createBoard();
             setupUnitEditor();
-            setupParams();
+
             setupRotationControls();
             setupKeyboard();
             setupFixedPositions();
