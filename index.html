@@ -896,8 +896,7 @@
             KING: { symbol: '♚', name: 'King', defaultHP: Infinity, isKing: true },
             PAWN: { symbol: '♟', name: 'Pawn', defaultHP: 2, isKing: false },
             KNIGHT: { symbol: '♞', name: 'Knight', defaultHP: 4, isKing: false },
-            ROOK: { symbol: '♜', name: 'Rook', defaultHP: 6, isKing: false },
-            BISHOP: { symbol: '♝', name: 'Bishop', defaultHP: 4, isKing: false },
+            ROOK: { symbol: '🛡️', name: 'Shield', defaultHP: 6, isKing: false },
             BISHOP: { symbol: '♝', name: 'Bishop', defaultHP: 4, isKing: false },
             ARCHER: { symbol: '☾', name: 'Archer', defaultHP: 4, isKing: false },
         };
@@ -1577,7 +1576,42 @@
                         iconGroup.appendChild(string);
                     }
                     iconGroup.setAttribute('pointer-events', 'none');
-                    g.appendChild(iconGroup); // Append group instead of text
+                    g.appendChild(iconGroup);
+                } else if (piece.type === 'ROOK') {
+                    // Custom SVG Shield Icon (Polished Kite Shield)
+                    const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    iconGroup.setAttribute('transform', `translate(${x}, ${y}) scale(1.1)`); // Slightly adjusted scale
+
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    // Sleek Kite Shield
+                    // d: Start top-left (-5.5, -7), Top line to (5.5, -7), 
+                    // curve down-right to tip (0, 8), curve up-left to close.
+                    path.setAttribute('d', 'M -6 -7 H 6 L 6 -1 Q 6 6 0 9 Q -6 6 -6 -1 Z');
+                    path.setAttribute('stroke', 'white');
+                    path.setAttribute('stroke-width', '2');
+                    path.setAttribute('fill', 'none');
+                    path.setAttribute('stroke-linejoin', 'round');
+                    path.setAttribute('stroke-linecap', 'round');
+
+                    // Central Ridge/Spine
+                    const detail = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    detail.setAttribute('d', 'M 0 -7 L 0 9');
+                    detail.setAttribute('stroke', 'white');
+                    detail.setAttribute('stroke-width', '1.5');
+                    detail.setAttribute('stroke-linecap', 'round');
+
+                    // Horizontal bar for visual weight
+                    const bar = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    bar.setAttribute('d', 'M -5.5 -2 L 5.5 -2');
+                    bar.setAttribute('stroke', 'white');
+                    bar.setAttribute('stroke-width', '1');
+
+                    iconGroup.appendChild(path);
+                    iconGroup.appendChild(detail);
+                    iconGroup.appendChild(bar);
+
+                    iconGroup.setAttribute('pointer-events', 'none');
+                    g.appendChild(iconGroup);
                 } else {
                     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                     text.setAttribute('x', x);
@@ -2316,7 +2350,7 @@
             if (!targetPiece || !targetPiece.alive) return false;
             if (attackerIndex === null) return targetPiece.pinned;
 
-            // Find target index using coordinates instead of reference (more reliable)
+            // Find target index using coordinates instead of index (more reliable)
             const targetIndex = gameState.pieces.findIndex(p => p.q === targetPiece.q && p.r === targetPiece.r);
             if (targetIndex < 0) return false;
 
@@ -3743,6 +3777,18 @@
                                </svg>`;
                         div.innerHTML = svgContent;
                         // Center flex if not already
+                        div.style.display = 'flex';
+                        div.style.alignItems = 'center';
+                        div.style.justifyContent = 'center';
+                    } else if (piece.type === 'ROOK') {
+                        const svgSize = 24;
+                        const strokeColor = piece.pinned ? '#5a5a5a' : 'white';
+                        // Matches polished Kite Shield design
+                        div.innerHTML = `<svg width="${svgSize}" height="${svgSize}" viewBox="-10 -10 20 20" style="vertical-align: middle; fill: none; stroke: ${strokeColor}; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
+                            <path d="M -6 -7 H 6 L 6 -1 Q 6 6 0 9 Q -6 6 -6 -1 Z" stroke-width="2"/>
+                            <path d="M 0 -7 L 0 9" stroke-width="1.5"/>
+                            <path d="M -5.5 -2 L 5.5 -2" stroke-width="1"/>
+                        </svg>`;
                         div.style.display = 'flex';
                         div.style.alignItems = 'center';
                         div.style.justifyContent = 'center';
