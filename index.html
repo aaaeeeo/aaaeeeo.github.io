@@ -103,6 +103,16 @@
             border: 1px solid var(--border);
         }
 
+        .timer-display {
+            font-family: 'Courier New', monospace;
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--accent-gold);
+            text-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+            margin: 4px 0;
+            letter-spacing: 1px;
+        }
+
         .turn-indicator .player-name {
             font-size: 22px;
             font-weight: 600;
@@ -765,8 +775,11 @@
 
             <div class="turn-indicator player1" id="turn-indicator">
                 <div class="player-name">Player 1</div>
+                <div class="timer-display" id="active-timer">05:00</div>
                 <div class="actions-remaining">Actions: <span id="actions-count">2</span>/2</div>
             </div>
+
+
 
 
 
@@ -860,6 +873,18 @@
     <div class="modal-overlay active" id="mode-selection-modal">
         <div class="modal">
             <h2>Ready to Play?</h2>
+            <div style="display: flex; gap: 16px; justify-content: center; margin-bottom: 24px;">
+                <div style="text-align: left;">
+                    <label style="display: block; margin-bottom: 8px; color: var(--text-primary); cursor: pointer;">
+                        <input type="checkbox" id="timer-enabled" checked> Enable Timer
+                    </label>
+                    <div id="timer-config">
+                        <label style="color: var(--text-muted); font-size: 14px;">Minutes per Player:</label>
+                        <input type="number" id="timer-minutes" value="5" min="1" max="60"
+                            style="width: 60px; padding: 4px; background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px;">
+                    </div>
+                </div>
+            </div>
             <div style="display: flex; gap: 16px; justify-content: center;">
                 <button class="btn primary" id="btn-start-game" style="padding: 16px 24px;">Start Game</button>
             </div>
@@ -927,7 +952,17 @@
             turnSnapshot: null,
             lanceTargetingMode: false,
             lanceTargetingRays: [],
-            forceFields: [] // {q, r, player} - Rooks create these
+            lanceTargetingMode: false,
+            lanceTargetingRays: [],
+            forceFields: [], // {q, r, player} - Rooks create these
+            turnHistory: new Map(),
+
+            // Timer State
+            timerEnabled: false,
+            timeLimit: 0, // ms
+            timeRemaining: { 1: 0, 2: 0 },
+            lastTimestamp: 0,
+            timerInterval: null
         };
 
         // Movement templates
@@ -3127,8 +3162,11 @@
                 throne: `Player ${winner} captures the Throne!`,
                 kingkill: `Player ${winner} destroys the enemy King!`,
                 elimination: `Player ${winner} eliminates all enemy units!`,
-                allpinned: `Player ${winner} pins all enemy pieces!`
+                allpinned: `Player ${winner} pins all enemy pieces!`,
+                timeout: `Player ${winner} wins on time!`
             };
+
+            if (gameState.timerInterval) cancelAnimationFrame(gameState.timerInterval);
 
             document.getElementById('victory-title').textContent = `Player ${winner} Wins!`;
             document.getElementById('victory-message').textContent = reasons[reason];
@@ -3203,6 +3241,7 @@
             gameState.turnHistory.clear();
 
             gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+            gameState.lastTimestamp = performance.now();
 
             // Expire Force Fields: Remove fields belonging to the player who is about to start their turn
             // (Meaning they lasted through the enemy's turn)
@@ -3273,7 +3312,8 @@
                 pieces: JSON.parse(JSON.stringify(gameState.pieces)),
                 actionsRemaining: gameState.actionsRemaining,
                 hasAnyPieceMoved: gameState.hasAnyPieceMoved,
-                forceFields: JSON.parse(JSON.stringify(gameState.forceFields))
+                forceFields: JSON.parse(JSON.stringify(gameState.forceFields)),
+                timeRemaining: JSON.parse(JSON.stringify(gameState.timeRemaining))
             };
         }
 
@@ -3283,6 +3323,10 @@
             gameState.pieces = JSON.parse(JSON.stringify(gameState.turnSnapshot.pieces));
             gameState.actionsRemaining = gameState.turnSnapshot.actionsRemaining;
             gameState.hasAnyPieceMoved = gameState.turnSnapshot.hasAnyPieceMoved;
+            if (gameState.turnSnapshot.timeRemaining) {
+                gameState.timeRemaining = JSON.parse(JSON.stringify(gameState.turnSnapshot.timeRemaining));
+            }
+            gameState.lastTimestamp = performance.now();
 
             gameState.usedPieces.clear();
             gameState.turnHistory.clear();
@@ -4017,6 +4061,22 @@
             gameState.forceFields = [];
             gameState.turnHistory = new Map(); // pieceIndex -> Set<ActionType>
 
+            // Setup Timer
+            const timerEnabled = document.getElementById('timer-enabled').checked;
+            gameState.timerEnabled = timerEnabled;
+
+            if (timerEnabled) {
+                const minutes = parseInt(document.getElementById('timer-minutes').value) || 5;
+                const ms = minutes * 60 * 1000;
+                gameState.timeLimit = ms;
+                gameState.timeRemaining = { 1: ms, 2: ms };
+                gameState.lastTimestamp = performance.now();
+
+                // Start Timer Loop
+                if (gameState.timerInterval) cancelAnimationFrame(gameState.timerInterval);
+                requestAnimationFrame(gameLoop);
+            }
+
             // Hide modals
             document.getElementById('victory-modal').classList.remove('active');
             document.getElementById('mode-selection-modal').classList.remove('active');
@@ -4036,6 +4096,8 @@
         }
 
         function resetGame() {
+            if (gameState.timerInterval) cancelAnimationFrame(gameState.timerInterval);
+
             // Just show mode selection
             document.getElementById('victory-modal').classList.remove('active');
             document.getElementById('mode-selection-modal').classList.add('active');
@@ -4096,6 +4158,47 @@
                     document.getElementById(`ring-${ring}`).classList.add('active');
                 }
             });
+        }
+
+        // ============================================
+        // GAME LOOP & TIMER
+        // ============================================
+
+        function gameLoop(timestamp) {
+            if (gameState.phase !== 'playing' || !gameState.timerEnabled) return;
+
+            const delta = timestamp - gameState.lastTimestamp;
+            gameState.lastTimestamp = timestamp;
+
+            // Decrease current player's time
+            gameState.timeRemaining[gameState.currentPlayer] -= delta;
+
+            // Check for timeout
+            if (gameState.timeRemaining[gameState.currentPlayer] <= 0) {
+                gameState.timeRemaining[gameState.currentPlayer] = 0;
+                updateTimerUI();
+                const winner = gameState.currentPlayer === 1 ? 2 : 1;
+                endGame(winner, 'timeout');
+                return;
+            }
+
+            updateTimerUI();
+            gameState.timerInterval = requestAnimationFrame(gameLoop);
+        }
+
+        function updateTimerUI() {
+            const el = document.getElementById('active-timer');
+            if (el) {
+                const ms = Math.max(0, gameState.timeRemaining[gameState.currentPlayer]);
+                el.textContent = formatTime(ms);
+            }
+        }
+
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }
 
         // ============================================
