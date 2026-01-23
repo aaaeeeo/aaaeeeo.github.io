@@ -1944,8 +1944,8 @@
 
                     if (occupant && occupant.player !== piece.player) {
                         // Check if the attacker is pinning this target (using coordinates instead of references)
-                        const occupantIndex = gameState.pieces.findIndex(p => p.q === occupant.q && p.r === occupant.r);
-                        const attackerIndex = gameState.pieces.findIndex(p => p.q === piece.q && p.r === piece.r);
+                        const occupantIndex = gameState.pieces.findIndex(p => p.alive && p.q === occupant.q && p.r === occupant.r);
+                        const attackerIndex = gameState.pieces.findIndex(p => p.alive && p.q === piece.q && p.r === piece.r);
                         const isPinningPiece = occupantIndex >= 0 &&
                             attackerIndex >= 0 &&
                             gameState.pinningMap.has(occupantIndex) &&
@@ -2207,7 +2207,7 @@
 
             // Check if the attacker is pinning this target (using simulated pin state)
             // Use coordinates instead of indexOf to avoid reference issues
-            const occupantIndex = gameState.pieces.findIndex(p => p.q === destAfterSimulation.q && p.r === destAfterSimulation.r);
+            const occupantIndex = gameState.pieces.findIndex(p => p.alive && p.q === destAfterSimulation.q && p.r === destAfterSimulation.r);
             const attackerIndex = pieceIndex;
             const isPinningPiece = occupantIndex >= 0 &&
                 gameState.pinningMap.has(occupantIndex) &&
@@ -2345,7 +2345,8 @@
             if (attackerIndex === null) return targetPiece.pinned;
 
             // Find target index using coordinates instead of index (more reliable)
-            const targetIndex = gameState.pieces.findIndex(p => p.q === targetPiece.q && p.r === targetPiece.r);
+            // Only consider alive pieces to avoid finding dead pieces at same position
+            const targetIndex = gameState.pieces.findIndex(p => p.alive && p.q === targetPiece.q && p.r === targetPiece.r);
             if (targetIndex < 0) return false;
 
             // If attacker is the target itself, removing attacker removes target, so target can't be pinned
@@ -2462,7 +2463,8 @@
 
         function applyDamage(piece, damage, attackerIndex = null) {
             // Find the piece index using coordinates (more reliable than indexOf)
-            const pieceIndex = gameState.pieces.findIndex(p => p.q === piece.q && p.r === piece.r);
+            // Only consider alive pieces to avoid finding dead pieces at same position
+            const pieceIndex = gameState.pieces.findIndex(p => p.alive && p.q === piece.q && p.r === piece.r);
 
             // If piece not found, return early
             if (pieceIndex < 0) {
