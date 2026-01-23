@@ -3148,7 +3148,7 @@
             const piece = gameState.pieces[pieceIndex];
             const history = getPieceActionHistory(pieceIndex);
 
-            if (piece.type === 'PAWN') {
+            if (piece.type === 'PAWN' || piece.type === 'KING') {
                 return history.size === 0;
             }
 
@@ -3159,7 +3159,7 @@
             const piece = gameState.pieces[pieceIndex];
             const history = getPieceActionHistory(pieceIndex);
 
-            if (piece.type === 'PAWN') {
+            if (piece.type === 'PAWN' || piece.type === 'KING') {
                 return history.size > 0;
             }
 
@@ -3285,6 +3285,7 @@
             gameState.hasAnyPieceMoved = gameState.turnSnapshot.hasAnyPieceMoved;
 
             gameState.usedPieces.clear();
+            gameState.turnHistory.clear();
             gameState.selectedPiece = null;
             gameState.validMoves = [];
 
