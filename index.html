@@ -314,6 +314,8 @@
             }
         }
 
+
+
         .hex.valid-move {
             fill: var(--valid-move);
         }
@@ -375,6 +377,22 @@
             filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.8));
         }
 
+        @keyframes blink-red {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.4;
+                transform: scale(0.8);
+            }
+        }
+
+
+
         .piece-stat.hp {
             fill: #df24ff;
             letter-spacing: 1px;
@@ -387,6 +405,94 @@
         .piece-stat.rng {
             fill: #22c55e;
             letter-spacing: 1px;
+        }
+
+        .bomb-indicator {
+            pointer-events: none;
+        }
+
+        .bomb-indicator.p1 {
+            fill: #f97316;
+            filter: drop-shadow(0 0 4px #f97316);
+            animation: blink-p1 1.2s infinite ease-in-out;
+        }
+
+        .bomb-indicator.p2 {
+            fill: #06b6d4;
+            filter: drop-shadow(0 0 4px #06b6d4);
+            animation: blink-p2 1.2s infinite ease-in-out;
+        }
+
+        @keyframes blink-p1 {
+
+            0%,
+            100% {
+                opacity: 1;
+                filter: drop-shadow(0 0 2px #f97316);
+            }
+
+            50% {
+                opacity: 0.6;
+                filter: drop-shadow(0 0 8px #f97316);
+            }
+        }
+
+        @keyframes blink-p2 {
+
+            0%,
+            100% {
+                opacity: 1;
+                filter: drop-shadow(0 0 2px #06b6d4);
+            }
+
+            50% {
+                opacity: 0.6;
+                filter: drop-shadow(0 0 8px #06b6d4);
+            }
+        }
+
+        @keyframes explosion-p1 {
+            0% {
+                transform: scale(0.2);
+                opacity: 1;
+                fill: #fbbf24;
+            }
+
+            100% {
+                transform: scale(3.5);
+                opacity: 0;
+                fill: #ef4444;
+            }
+        }
+
+        @keyframes explosion-p2 {
+            0% {
+                transform: scale(0.2);
+                opacity: 1;
+                fill: #22d3ee;
+            }
+
+            100% {
+                transform: scale(3.5);
+                opacity: 0;
+                fill: #0891b2;
+            }
+        }
+
+        .explosion-ring {
+            pointer-events: none;
+            stroke-width: 1;
+            stroke: white;
+            r: 30;
+            /* Base radius for scaling */
+        }
+
+        .explosion-ring.p1 {
+            animation: explosion-p1 0.6s ease-out forwards;
+        }
+
+        .explosion-ring.p2 {
+            animation: explosion-p2 0.6s ease-out forwards;
         }
 
         .ring-highlight {
@@ -916,7 +1022,7 @@
             PAWN: { symbol: '♟', name: 'Pawn', defaultHP: 2, isKing: false },
             KNIGHT: { symbol: '♞', name: 'Knight', defaultHP: 4, isKing: false },
             ROOK: { symbol: '🛡️', name: 'Shield', defaultHP: 6, isKing: false },
-            BISHOP: { symbol: '♝', name: 'Bishop', defaultHP: 4, isKing: false },
+            BISHOP: { symbol: '💣', name: 'Bomber', defaultHP: 4, isKing: false },
             ARCHER: { symbol: '☾', name: 'Archer', defaultHP: 4, isKing: false },
         };
 
@@ -962,7 +1068,13 @@
             timeLimit: 0, // ms
             timeRemaining: { 1: 0, 2: 0 },
             lastTimestamp: 0,
-            timerInterval: null
+            timeRemaining: { 1: 0, 2: 0 },
+            lastTimestamp: 0,
+            timerInterval: null,
+
+            // Bomb State
+            bombs: [], // { id, owner: pieceIndex, type: 'cell'|'unit', q, r, targetUnitIndex }
+            bombTargetingMode: false
         };
 
         // Movement templates
@@ -1641,6 +1753,48 @@
 
                     iconGroup.setAttribute('pointer-events', 'none');
                     g.appendChild(iconGroup);
+                } else if (piece.type === 'BISHOP') {
+                    // Custom SVG Bomb Icon for Bomber
+                    const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    iconGroup.setAttribute('transform', `translate(${x}, ${y}) scale(1.1)`);
+
+                    const fuse = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    // S-shaped fuse
+                    fuse.setAttribute('d', 'M 2 -7 Q 5 -10 3 -12');
+                    fuse.setAttribute('stroke', 'white');
+                    fuse.setAttribute('stroke-width', '1.5');
+                    fuse.setAttribute('fill', 'none');
+                    fuse.setAttribute('stroke-linecap', 'round');
+
+                    const cap = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    cap.setAttribute('x', -2);
+                    cap.setAttribute('y', -8.5);
+                    cap.setAttribute('width', 4);
+                    cap.setAttribute('height', 2);
+                    cap.setAttribute('fill', 'white');
+                    cap.setAttribute('rx', 0.5);
+
+                    const body = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    body.setAttribute('cx', 0);
+                    body.setAttribute('cy', 1);
+                    body.setAttribute('r', 7);
+                    body.setAttribute('fill', 'none');
+                    body.setAttribute('stroke', 'white');
+                    body.setAttribute('stroke-width', '2');
+
+                    const shine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    shine.setAttribute('d', 'M -3 -2 Q -4 1 -3 4');
+                    shine.setAttribute('stroke', 'white');
+                    shine.setAttribute('stroke-width', '1');
+                    shine.setAttribute('fill', 'none');
+                    shine.setAttribute('stroke-linecap', 'round');
+
+                    iconGroup.appendChild(fuse);
+                    iconGroup.appendChild(cap);
+                    iconGroup.appendChild(body);
+                    iconGroup.appendChild(shine);
+                    iconGroup.setAttribute('pointer-events', 'none');
+                    g.appendChild(iconGroup);
                 } else {
                     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                     text.setAttribute('x', x);
@@ -1695,6 +1849,57 @@
 
                 pieceGroup.appendChild(g);
             });
+
+            // Render Sticky Bombs
+            if (gameState.bombs) {
+                gameState.bombs.forEach(bomb => {
+                    let x, y;
+                    let isValid = true;
+
+                    if (bomb.type === 'cell') {
+                        const pos = hexToPixel(bomb.q, bomb.r);
+                        x = pos.x;
+                        y = pos.y;
+                    } else if (bomb.type === 'unit') {
+                        const targetPiece = gameState.pieces[bomb.targetUnitIndex];
+                        if (targetPiece && targetPiece.alive) {
+                            const pos = hexToPixel(targetPiece.q, targetPiece.r);
+                            x = pos.x;
+                            y = pos.y;
+                        } else {
+                            isValid = false;
+                        }
+                    }
+
+                    if (isValid) {
+                        const bombCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+
+                        // Position adjustment
+                        if (bomb.type === 'unit') {
+                            // Bottom-left corner
+                            const offsetX = -HEX_SIZE * 0.5;
+                            const offsetY = HEX_SIZE * 0.4;
+                            bombCircle.setAttribute('cx', x + offsetX);
+                            bombCircle.setAttribute('cy', y + offsetY);
+                        } else {
+                            // Center for cell bomb
+                            bombCircle.setAttribute('cx', x);
+                            bombCircle.setAttribute('cy', y);
+                        }
+
+                        // Determine owner player for color class
+                        const ownerPiece = gameState.pieces[bomb.owner];
+                        const ownerPlayer = ownerPiece ? ownerPiece.player : 1;
+
+                        bombCircle.setAttribute('r', 6);
+                        bombCircle.classList.add('bomb-indicator');
+                        bombCircle.classList.add(`p${ownerPlayer}`);
+                        bombCircle.setAttribute('pointer-events', 'none');
+
+                        pieceGroup.appendChild(bombCircle);
+                    }
+                });
+            }
 
             // Ensure piece-group is always on top after rendering pieces
             const svg = document.getElementById('game-board');
@@ -2524,6 +2729,8 @@
                     if (stillPinnedWithoutAttacker) {
                         // Still pinned without attacker - die immediately
                         actualPiece.alive = false;
+                        // Detonate any bombs attached to this unit
+                        detonateBombsOnUnit(pieceIndex);
                         if (PIECE_TYPES[actualPiece.type].isKing) {
                             addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
                             endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
@@ -2536,6 +2743,8 @@
                 } else {
                     // Pinned, but no attacker specified - die immediately
                     actualPiece.alive = false;
+                    // Detonate any bombs attached to this unit
+                    detonateBombsOnUnit(pieceIndex);
                     if (PIECE_TYPES[actualPiece.type].isKing) {
                         addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
                         endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
@@ -2559,6 +2768,8 @@
                 actualPiece.hp -= damage;
                 if (actualPiece.hp <= 0) {
                     actualPiece.alive = false;
+                    // Detonate any bombs attached to this unit
+                    detonateBombsOnUnit(pieceIndex);
                     addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed!`, 'system');
                     endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
                 }
@@ -2568,6 +2779,8 @@
             actualPiece.hp -= damage;
             if (actualPiece.hp <= 0) {
                 actualPiece.alive = false;
+                // Detonate any bombs attached to this unit
+                detonateBombsOnUnit(pieceIndex);
                 addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[actualPiece.type].name} destroyed`, actualPiece.player);
             }
         }
@@ -3107,6 +3320,28 @@
                 piece.r = rotated.r;
             });
 
+            // Rotate each bomb (cell-based)
+            if (gameState.bombs) {
+                gameState.bombs.forEach(bomb => {
+                    if (bomb.type === 'cell' && getRing(bomb.q, bomb.r) === ring) {
+                        const rotated = rotateHexAroundCenter(bomb.q, bomb.r, clockwise ? 1 : -1);
+                        bomb.q = rotated.q;
+                        bomb.r = rotated.r;
+                    }
+                });
+            }
+
+            // Rotate each force field
+            if (gameState.forceFields) {
+                gameState.forceFields.forEach(field => {
+                    if (getRing(field.q, field.r) === ring) {
+                        const rotated = rotateHexAroundCenter(field.q, field.r, clockwise ? 1 : -1);
+                        field.q = rotated.q;
+                        field.r = rotated.r;
+                    }
+                });
+            }
+
             addLog(`${gameState.currentPlayer === 1 ? 'P1' : 'P2'} King rotates ring ${ring} ${clockwise ? 'CW' : 'CCW'}`, gameState.currentPlayer);
 
             // Update pins after rotation
@@ -3313,7 +3548,8 @@
                 actionsRemaining: gameState.actionsRemaining,
                 hasAnyPieceMoved: gameState.hasAnyPieceMoved,
                 forceFields: JSON.parse(JSON.stringify(gameState.forceFields)),
-                timeRemaining: JSON.parse(JSON.stringify(gameState.timeRemaining))
+                timeRemaining: JSON.parse(JSON.stringify(gameState.timeRemaining)),
+                bombs: JSON.parse(JSON.stringify(gameState.bombs))
             };
         }
 
@@ -3326,6 +3562,13 @@
             if (gameState.turnSnapshot.timeRemaining) {
                 gameState.timeRemaining = JSON.parse(JSON.stringify(gameState.turnSnapshot.timeRemaining));
             }
+            // Restore bombs
+            if (gameState.turnSnapshot.bombs) {
+                gameState.bombs = []; // Bomb state reset for now
+            } else {
+                gameState.bombs = [];
+            }
+
             gameState.lastTimestamp = performance.now();
 
             gameState.usedPieces.clear();
@@ -3336,6 +3579,7 @@
             if (gameState.pathBuilding) cancelPathBuilding();
             if (gameState.rotationMode) exitRotationMode();
             if (gameState.lanceTargetingMode) exitLanceTargetingMode();
+            if (gameState.bombTargetingMode) exitBombTargetingMode();
 
             gameState.forceFields = []; // Reset force fields on turn reset (simple approach) or restore from snapshot if we added it?
             // Snapshot doesn't have forceFields yet. We should add it to snapshot.
@@ -3370,6 +3614,53 @@
             // Lance targeting mode
             if (gameState.lanceTargetingMode) {
                 handleLanceTargetingClick(q, r);
+                return;
+            }
+
+
+
+
+            // Sticky Bomb targeting mode
+            if (gameState.bombTargetingMode) {
+                // Must be a neighbor
+                const piece = gameState.pieces[gameState.selectedPiece];
+                if (hexDistance(piece.q, piece.r, q, r) === 1) {
+                    const targetPiece = getPieceAt(q, r);
+
+                    if (targetPiece) {
+                        if (targetPiece.player === gameState.currentPlayer) {
+                            addLog('Cannot place bomb on an ally!', 'system');
+                            return;
+                        }
+
+                        // Enemy - stick to unit
+                        const targetIndex = gameState.pieces.indexOf(targetPiece);
+                        gameState.bombs.push({
+                            id: Date.now(),
+                            owner: gameState.selectedPiece,
+                            type: 'unit',
+                            targetUnitIndex: targetIndex
+                        });
+                        addLog('Bomb stuck to enemy!', gameState.currentPlayer);
+                    } else {
+                        // Empty cell
+                        gameState.bombs.push({
+                            id: Date.now(),
+                            owner: gameState.selectedPiece,
+                            type: 'cell',
+                            q: q,
+                            r: r
+                        });
+                        addLog('Stick Bomb placed!', gameState.currentPlayer);
+                    }
+
+                    useAction(gameState.selectedPiece, 'ALT');
+                    exitBombTargetingMode();
+                    renderPieces(); // Update visual
+                } else {
+                    addLog('Cancelled Sticky Bomb (Must select a neighboring cell)', 'system');
+                    exitBombTargetingMode();
+                }
                 return;
             }
 
@@ -3424,6 +3715,38 @@
                 handleLanceTargetingClick(piece.q, piece.r);
                 return;
             }
+
+            // If selecting a different piece, check for bomb targeting
+            if (gameState.bombTargetingMode && gameState.selectedPiece !== index) {
+                const targetPiece = gameState.pieces[index];
+                const sourcePiece = gameState.pieces[gameState.selectedPiece];
+
+                // Check if it's a neighbor
+                if (hexDistance(sourcePiece.q, sourcePiece.r, targetPiece.q, targetPiece.r) === 1) {
+                    if (targetPiece.player === gameState.currentPlayer) {
+                        addLog('Cannot place bomb on an ally!', 'system');
+                        return; // Stay in targeting mode
+                    } else {
+                        // Enemy - stick to unit
+                        gameState.bombs.push({
+                            id: Date.now(),
+                            owner: gameState.selectedPiece,
+                            type: 'unit',
+                            targetUnitIndex: index
+                        });
+                        addLog('Bomb stuck to enemy!', gameState.currentPlayer);
+                        useAction(gameState.selectedPiece, 'ALT');
+                        exitBombTargetingMode();
+                        renderPieces();
+                        return;
+                    }
+                }
+
+                // If not a neighbor, exit mode
+                exitBombTargetingMode();
+            }
+
+
 
             // If we're in path building mode, check if this piece is on a valid next step
             if (gameState.pathBuilding && gameState.pathStartPiece !== null) {
@@ -3494,6 +3817,9 @@
                     }
                 } else if (piece.type === 'ROOK') {
                     rotateBtn.innerHTML = '⚡ Force Field';
+                } else if (piece.type === 'BISHOP') {
+                    const hasBomb = gameState.bombs && gameState.bombs.some(b => b.owner === pieceIndex);
+                    rotateBtn.innerHTML = hasBomb ? '⚡ Remove Bomb' : '⚡ Sticky Bomb';
                 } else {
                     rotateBtn.innerHTML = '⚡ Alt Move';
                 }
@@ -3522,6 +3848,9 @@
 
             if (gameState.lanceTargetingMode) {
                 exitLanceTargetingMode();
+            }
+            if (gameState.bombTargetingMode) {
+                gameState.bombTargetingMode = false;
             }
 
             clearHighlights();
@@ -3708,6 +4037,127 @@
             });
         }
 
+        // ============================================
+        // BISHOP STICKY BOMB
+        // ============================================
+
+        function activateStickyBomb(pieceIndex) {
+            gameState.bombTargetingMode = true;
+            gameState.selectedPiece = pieceIndex;
+            addLog('Select a neighboring cell (Bomber Alt Move)', 'system');
+
+            // Show cancel button
+            document.getElementById('btn-cancel-path').style.display = 'inline-block';
+            updateUI();
+
+            // Highlight neighbors
+            const piece = gameState.pieces[pieceIndex];
+            for (let dir = 0; dir < 6; dir++) {
+                const n = hexNeighbor(piece.q, piece.r, dir);
+                if (isValidHex(n.q, n.r)) {
+                    const hex = document.querySelector(`.hex[data-q="${n.q}"][data-r="${n.r}"]`);
+                    if (hex) hex.classList.add('valid-move');
+                }
+            }
+        }
+
+        function createExplosionEffect(q, r, player) {
+            const pos = hexToPixel(q, r);
+            const svg = document.getElementById('game-board');
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
+
+            const effect = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            effect.setAttribute('cx', 0);
+            effect.setAttribute('cy', 0);
+            effect.classList.add('explosion-ring', `p${player}`);
+
+            g.appendChild(effect);
+            svg.appendChild(g);
+
+            // Remove element after animation completes
+            setTimeout(() => {
+                if (g.parentNode) svg.removeChild(g);
+            }, 700);
+        }
+
+        function detonateBomb(bomb) {
+            if (!bomb) return;
+
+            // Get explosion center
+            let q, r;
+            if (bomb.type === 'cell') {
+                q = bomb.q;
+                r = bomb.r;
+            } else {
+                const target = gameState.pieces[bomb.targetUnitIndex];
+                if (!target) {
+                    const idx = gameState.bombs.indexOf(bomb);
+                    if (idx !== -1) gameState.bombs.splice(idx, 1);
+                    return;
+                }
+                q = target.q;
+                r = target.r;
+            }
+
+            const ownerPiece = gameState.pieces[bomb.owner];
+            const ownerPlayer = ownerPiece ? ownerPiece.player : (gameState.currentPlayer);
+
+            // Visual effect
+            createExplosionEffect(q, r, ownerPlayer);
+
+            addLog(`Bomb detonates at (${q}, ${r})!`, 'system');
+
+            // Remove bomb first so it doesn't trigger again
+            const idx = gameState.bombs.indexOf(bomb);
+            if (idx !== -1) {
+                gameState.bombs.splice(idx, 1);
+            }
+
+            // Find all pieces in radius 1
+            const piecesToDamage = [];
+            gameState.pieces.forEach((p, i) => {
+                if (p.alive && hexDistance(p.q, p.r, q, r) <= 1) {
+                    // Shield check: Only enemy pieces of the bomb owner take damage
+                    if (p.player !== ownerPlayer) {
+                        piecesToDamage.push(p);
+                    }
+                }
+            });
+
+            // Apply damage
+            piecesToDamage.forEach(p => {
+                applyDamage(p, 2, bomb.owner);
+            });
+
+            renderPieces();
+        }
+
+        function detonateBombsOnUnit(unitIndex) {
+            if (!gameState.bombs) return;
+            // Identify bombs attached to this unit
+            const bombsToTrigger = gameState.bombs.filter(b => b.type === 'unit' && b.targetUnitIndex === unitIndex);
+            // Trigger each one
+            bombsToTrigger.forEach(b => detonateBomb(b));
+        }
+
+
+        function exitBombTargetingMode() {
+            gameState.bombTargetingMode = false;
+            clearHighlights();
+            // Important: Handle cleanup to prevent game lock
+            if (gameState.selectedPiece !== null) {
+                cancelPathBuilding(); // Clears selection and UI state
+            } else {
+                document.getElementById('btn-cancel-path').style.display = 'none';
+                updateUI();
+            }
+        }
+
+
+
+
+
         function enterRotationMode(pieceIndex) {
             const piece = gameState.pieces[pieceIndex];
             if (!PIECE_TYPES[piece.type].isKing) return;
@@ -3821,6 +4271,19 @@
                         div.style.display = 'flex';
                         div.style.alignItems = 'center';
                         div.style.justifyContent = 'center';
+                    } else if (piece.type === 'BISHOP') {
+                        const svgSize = 24;
+                        const strokeColor = piece.pinned ? '#5a5a5a' : 'white';
+                        // Consistent SVG Bomb icon
+                        div.innerHTML = `<svg width="${svgSize}" height="${svgSize}" viewBox="-10 -10 20 20" style="vertical-align: middle; fill: none; stroke: ${strokeColor}; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
+                            <path d="M 2 -6 Q 5 -9 3 -11" stroke-width="1.5"/>
+                            <rect x="-1.5" y="-7.5" width="3" height="1.5" fill="${strokeColor}" rx="0.3"/>
+                            <circle cx="0" cy="1.5" r="6" stroke-width="2"/>
+                            <path d="M -2.5 -1 Q -3.5 1.5 -2.5 4" stroke-width="1"/>
+                        </svg>`;
+                        div.style.display = 'flex';
+                        div.style.alignItems = 'center';
+                        div.style.justifyContent = 'center';
                     } else if (piece.type === 'ROOK') {
                         const svgSize = 24;
                         const strokeColor = piece.pinned ? '#5a5a5a' : 'white';
@@ -3870,6 +4333,17 @@
                     btn.innerHTML = `<svg width="24" height="24" viewBox="-10 -10 20 20" style="vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2;">
                                  <path d="M 3 -7 Q -6 0 3 7 M -6 0 L 7 0 M 3 -3 L 7 0 L 3 3" stroke-linecap="round" stroke-linejoin="round"/>
                                </svg>`;
+                    btn.style.display = 'flex';
+                    btn.style.alignItems = 'center';
+                    btn.style.justifyContent = 'center';
+                } else if (type === 'BISHOP') {
+                    // Use Bomb SVG for Bomber
+                    btn.innerHTML = `<svg width="24" height="24" viewBox="-10 -10 20 20" style="vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
+                             <path d="M 2 -6 Q 5 -9 3 -11" stroke-width="1.5"/>
+                             <rect x="-1.5" y="-7.5" width="3" height="1.5" fill="currentColor" rx="0.3"/>
+                             <circle cx="0" cy="1.5" r="6" stroke-width="2"/>
+                             <path d="M -2.5 -1 Q -3.5 1.5 -2.5 4" stroke-width="1"/>
+                         </svg>`;
                     btn.style.display = 'flex';
                     btn.style.alignItems = 'center';
                     btn.style.justifyContent = 'center';
@@ -4065,6 +4539,7 @@
             const timerEnabled = document.getElementById('timer-enabled').checked;
             gameState.timerEnabled = timerEnabled;
 
+
             if (timerEnabled) {
                 const minutes = parseInt(document.getElementById('timer-minutes').value) || 5;
                 const ms = minutes * 60 * 1000;
@@ -4098,11 +4573,15 @@
         function resetGame() {
             if (gameState.timerInterval) cancelAnimationFrame(gameState.timerInterval);
 
+            gameState.bombs = []; // Clear bombs
+
             // Just show mode selection
             document.getElementById('victory-modal').classList.remove('active');
             document.getElementById('mode-selection-modal').classList.add('active');
             gameState.phase = 'setup';
             document.getElementById('game-log').innerHTML = '<div class="log-entry system">Game reset.</div>';
+
+            renderPieces(); // Update visual to remove bombs
         }
 
 
@@ -4141,6 +4620,8 @@
                         cancelPathBuilding();
                     } else if (gameState.lanceTargetingMode) {
                         cancelPathBuilding();
+                    } else if (gameState.bombTargetingMode) {
+                        exitBombTargetingMode();
                     } else {
                         gameState.selectedPiece = null;
                         gameState.validMoves = [];
@@ -4238,7 +4719,26 @@
                         enterRotationMode(gameState.selectedPiece);
                         document.getElementById('btn-rotate').style.display = 'none';
                     } else if (piece.type === 'ARCHER') {
-                        enterLanceTargetingMode(gameState.selectedPiece);
+                        if (gameState.lanceTargetingMode) {
+                            cancelPathBuilding(); // Lance also uses cancelPathBuilding to exit
+                        } else {
+                            enterLanceTargetingMode(gameState.selectedPiece);
+                        }
+                    } else if (piece.type === 'BISHOP') {
+                        const bomb = gameState.bombs.find(b => b.owner === gameState.selectedPiece);
+                        if (bomb) {
+                            // Detonate existing bomb
+                            detonateBomb(bomb);
+                            useAction(gameState.selectedPiece, 'ALT');
+                            cancelPathBuilding();
+                        } else {
+                            // No bomb, enter placement mode
+                            if (gameState.bombTargetingMode) {
+                                exitBombTargetingMode();
+                            } else {
+                                activateStickyBomb(gameState.selectedPiece);
+                            }
+                        }
                     } else if (piece.type === 'ROOK') {
                         activateForceField(gameState.selectedPiece);
                     } else if (piece.type !== 'PAWN') {
