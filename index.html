@@ -3406,6 +3406,9 @@
             };
 
             if (gameState.timerInterval) cancelAnimationFrame(gameState.timerInterval);
+            // Clear bombs on game end
+            gameState.bombs = [];
+            renderPieces();
 
             document.getElementById('victory-title').textContent = `Player ${winner} Wins!`;
             document.getElementById('victory-message').textContent = reasons[reason];
@@ -3562,9 +3565,12 @@
             gameState.pieces = JSON.parse(JSON.stringify(gameState.turnSnapshot.pieces));
             gameState.actionsRemaining = gameState.turnSnapshot.actionsRemaining;
             gameState.hasAnyPieceMoved = gameState.turnSnapshot.hasAnyPieceMoved;
-            // Restore bombs
+            if (gameState.turnSnapshot.timeRemaining) {
+                gameState.timeRemaining = JSON.parse(JSON.stringify(gameState.turnSnapshot.timeRemaining));
+            }
+            // Restore bombs from snapshot (removes bombs placed this turn)
             if (gameState.turnSnapshot.bombs) {
-                gameState.bombs = []; // Bomb state reset for now
+                gameState.bombs = JSON.parse(JSON.stringify(gameState.turnSnapshot.bombs));
             } else {
                 gameState.bombs = [];
             }
