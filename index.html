@@ -3552,7 +3552,6 @@
                 actionsRemaining: gameState.actionsRemaining,
                 hasAnyPieceMoved: gameState.hasAnyPieceMoved,
                 forceFields: JSON.parse(JSON.stringify(gameState.forceFields)),
-                timeRemaining: JSON.parse(JSON.stringify(gameState.timeRemaining)),
                 bombs: JSON.parse(JSON.stringify(gameState.bombs))
             };
         }
@@ -3563,9 +3562,6 @@
             gameState.pieces = JSON.parse(JSON.stringify(gameState.turnSnapshot.pieces));
             gameState.actionsRemaining = gameState.turnSnapshot.actionsRemaining;
             gameState.hasAnyPieceMoved = gameState.turnSnapshot.hasAnyPieceMoved;
-            if (gameState.turnSnapshot.timeRemaining) {
-                gameState.timeRemaining = JSON.parse(JSON.stringify(gameState.turnSnapshot.timeRemaining));
-            }
             // Restore bombs
             if (gameState.turnSnapshot.bombs) {
                 gameState.bombs = []; // Bomb state reset for now
