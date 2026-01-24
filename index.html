@@ -2729,8 +2729,9 @@
                     if (stillPinnedWithoutAttacker) {
                         // Still pinned without attacker - die immediately
                         actualPiece.alive = false;
-                        // Detonate any bombs attached to this unit
+                        // Detonate any bombs attached to or owned by this unit
                         detonateBombsOnUnit(pieceIndex);
+                        detonateBombsOwnedBy(pieceIndex);
                         if (PIECE_TYPES[actualPiece.type].isKing) {
                             addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
                             endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
@@ -2743,8 +2744,9 @@
                 } else {
                     // Pinned, but no attacker specified - die immediately
                     actualPiece.alive = false;
-                    // Detonate any bombs attached to this unit
+                    // Detonate any bombs attached to or owned by this unit
                     detonateBombsOnUnit(pieceIndex);
+                    detonateBombsOwnedBy(pieceIndex);
                     if (PIECE_TYPES[actualPiece.type].isKing) {
                         addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
                         endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
@@ -2768,8 +2770,9 @@
                 actualPiece.hp -= damage;
                 if (actualPiece.hp <= 0) {
                     actualPiece.alive = false;
-                    // Detonate any bombs attached to this unit
+                    // Detonate any bombs attached to or owned by this unit
                     detonateBombsOnUnit(pieceIndex);
+                    detonateBombsOwnedBy(pieceIndex);
                     addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed!`, 'system');
                     endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
                 }
@@ -2779,8 +2782,9 @@
             actualPiece.hp -= damage;
             if (actualPiece.hp <= 0) {
                 actualPiece.alive = false;
-                // Detonate any bombs attached to this unit
+                // Detonate any bombs attached to or owned by this unit
                 detonateBombsOnUnit(pieceIndex);
+                detonateBombsOwnedBy(pieceIndex);
                 addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[actualPiece.type].name} destroyed`, actualPiece.player);
             }
         }
@@ -4137,6 +4141,14 @@
             if (!gameState.bombs) return;
             // Identify bombs attached to this unit
             const bombsToTrigger = gameState.bombs.filter(b => b.type === 'unit' && b.targetUnitIndex === unitIndex);
+            // Trigger each one
+            bombsToTrigger.forEach(b => detonateBomb(b));
+        }
+
+        function detonateBombsOwnedBy(unitIndex) {
+            if (!gameState.bombs) return;
+            // Identify bombs owned by this unit
+            const bombsToTrigger = gameState.bombs.filter(b => b.owner === unitIndex);
             // Trigger each one
             bombsToTrigger.forEach(b => detonateBomb(b));
         }
