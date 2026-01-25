@@ -2547,12 +2547,16 @@
                     // Skip destination - it will be handled separately
                     if (pos.q === targetQ && pos.r === targetR) return;
 
-                    const target = pos.piece || getPieceAt(pos.q, pos.r);
-                    if (target && target.player !== piece.player) {
-                        // Check if this piece would die from the damage
-                        if (target.pinned || canKillWithRam(piece, target, 1)) {
-                            piecesToKill.push(target);
-                        }
+                    const targetsAtPos = gameState.pieces.filter(p => p.alive && p.q === pos.q && p.r === pos.r && p.player !== piece.player);
+                    if (targetsAtPos.length > 0) {
+                        // Only need to add one piece from the cell; simulateMoveAndValidate's logic
+                        // will ideally check all enemies later, but for piecesToKill along the path
+                        // we should mark all of them as dead.
+                        targetsAtPos.forEach(target => {
+                            if (target.pinned || canKillWithRam(piece, target, 1)) {
+                                piecesToKill.push(target);
+                            }
+                        });
                     }
                 });
             }
@@ -2568,8 +2572,10 @@
             updatePins();
 
             // Check if destination would still be killable after simulated kills
-            const destAfterSimulation = getPieceAt(targetQ, targetR);
-            if (!destAfterSimulation || destAfterSimulation.player === piece.player) {
+            // We must check if ALL enemies at destination would die
+            const destEnemies = gameState.pieces.filter(p => p.alive && p.q === targetQ && p.r === targetR && p.player !== piece.player);
+
+            if (destEnemies.length === 0) {
                 // Restore original states
                 originalAliveStates.forEach((alive, target) => {
                     target.alive = alive;
@@ -2579,56 +2585,54 @@
             }
 
             const totalDamageInstances = 1; // Destination always takes 1 instance of damage
-
-            // Check if the attacker is pinning this target (using simulated pin state)
-            // Use coordinates instead of indexOf to avoid reference issues
-            const occupantIndex = gameState.pieces.findIndex(p => p.alive && p.q === destAfterSimulation.q && p.r === destAfterSimulation.r);
             const attackerIndex = pieceIndex;
-            const isPinningPiece = occupantIndex >= 0 &&
-                gameState.pinningMap.has(occupantIndex) &&
-                gameState.pinningMap.get(occupantIndex).has(attackerIndex);
 
-            // Check if destination would die (using same logic as applyDamage)
-            let wouldKill = false;
+            // ALL enemies at destination must be killable for the move to be valid
+            const allEnemiesWillDie = destEnemies.every(enemy => {
+                const occupantIndex = gameState.pieces.indexOf(enemy);
+                const isPinningPiece = occupantIndex >= 0 &&
+                    gameState.pinningMap.has(occupantIndex) &&
+                    gameState.pinningMap.get(occupantIndex).has(attackerIndex);
 
-            // Check if target would still be pinned without attacker
-            if (destAfterSimulation.pinned && attackerIndex !== null) {
-                const stillPinnedWithoutAttacker = isStillPinnedWithoutAttacker(destAfterSimulation, attackerIndex);
-                if (stillPinnedWithoutAttacker) {
-                    // Still pinned without attacker - insta-kill allowed
-                    wouldKill = true;
-                } else {
-                    // Not pinned without attacker - must kill with damage
-                    wouldKill = canKillWithRam(piece, destAfterSimulation, totalDamageInstances);
-                }
-            } else if (destAfterSimulation.pinned) {
-                // Target is pinned, no attacker specified - insta-kill
-                wouldKill = true;
-            } else {
-                // Not pinned - must kill with damage
-                wouldKill = canKillWithRam(piece, destAfterSimulation, totalDamageInstances);
-            }
+                let enemyWouldDie = false;
 
-            // Handle King special case (matching applyDamage logic)
-            if (PIECE_TYPES[destAfterSimulation.type].isKing) {
-                if (destAfterSimulation.pinned && isPinningPiece) {
-                    // Attacker is pinning King - check if still pinned without attacker
-                    const stillPinnedWithoutAttacker = isStillPinnedWithoutAttacker(destAfterSimulation, attackerIndex);
+                // Check if target would still be pinned without attacker
+                if (enemy.pinned && attackerIndex !== null) {
+                    const stillPinnedWithoutAttacker = isStillPinnedWithoutAttacker(enemy, attackerIndex);
                     if (stillPinnedWithoutAttacker) {
                         // Still pinned without attacker - insta-kill allowed
-                        wouldKill = true;
+                        enemyWouldDie = true;
                     } else {
-                        // Not pinned without attacker - can damage King
-                        wouldKill = destAfterSimulation.hp <= totalDamageInstances * ramDamage;
+                        // Not pinned without attacker - must kill with damage
+                        enemyWouldDie = canKillWithRam(piece, enemy, totalDamageInstances);
                     }
-                } else if (destAfterSimulation.pinned) {
-                    // King is pinned, attacker is not pinning - insta-kill allowed
-                    wouldKill = true;
+                } else if (enemy.pinned) {
+                    // Target is pinned, no attacker specified - insta-kill
+                    enemyWouldDie = true;
                 } else {
-                    // King not pinned - cannot be damaged
-                    wouldKill = false;
+                    // Not pinned - must kill with damage
+                    enemyWouldDie = canKillWithRam(piece, enemy, totalDamageInstances);
                 }
-            }
+
+                // Handle King special case
+                if (PIECE_TYPES[enemy.type].isKing) {
+                    if (enemy.pinned && isPinningPiece) {
+                        // Attacker is pinning King - check if still pinned without attacker
+                        const stillPinnedWithoutAttacker = isStillPinnedWithoutAttacker(enemy, attackerIndex);
+                        if (stillPinnedWithoutAttacker) {
+                            enemyWouldDie = true;
+                        } else {
+                            enemyWouldDie = enemy.hp <= totalDamageInstances * ramDamage;
+                        }
+                    } else if (enemy.pinned) {
+                        enemyWouldDie = true;
+                    } else {
+                        enemyWouldDie = false;
+                    }
+                }
+
+                return enemyWouldDie;
+            });
 
             // Restore original states
             originalAliveStates.forEach((alive, target) => {
@@ -2636,7 +2640,7 @@
             });
             updatePins();
 
-            return wouldKill;
+            return allEnemiesWillDie;
         }
 
         function executeMove(pieceIndex, targetQ, targetR, move) {
@@ -2658,9 +2662,10 @@
                     // Skip destination - it will be handled separately
                     if (pos.q === targetQ && pos.r === targetR) return;
 
-                    const target = pos.piece || getPieceAt(pos.q, pos.r);
-                    if (target && target.player !== piece.player) {
-                        piecesToDamage.push(target);
+                    const targets = gameState.pieces.filter(p => p.alive && p.q === pos.q && p.r === pos.r && p.player !== piece.player);
+                    if (targets.length > 0) {
+                        // Add only one piece per location; applyDamage will handle all occupants
+                        piecesToDamage.push(targets[0]);
                     }
                 });
             }
@@ -2673,12 +2678,16 @@
             });
 
             // Handle enemy at destination (we've already validated it will die)
+            // Note: applyDamage now automatically hits all pieces at the location, 
+            // so calling it once on any occupant is enough to hit both ghost and summoner.
             if (destOccupant && destOccupant.player !== piece.player) {
                 applyDamage(destOccupant, ramDamage, pieceIndex);
                 // Recalculate pins after damage/kill
                 updatePins();
-                // Double-check that it actually died
-                if (destOccupant.alive) {
+
+                // Double-check that no enemies remain at destination
+                const survivors = gameState.pieces.filter(p => p.alive && p.q === targetQ && p.r === targetR && p.player !== piece.player);
+                if (survivors.length > 0) {
                     console.error('Move validation error - destination survived');
                     addLog('Cannot land on enemy that would survive!', 'system');
                     return false;
@@ -2837,34 +2846,46 @@
         }
 
         function applyDamage(piece, damage, attackerIndex = null) {
-            // Find the piece index using coordinates (more reliable than indexOf)
-            // Only consider alive pieces to avoid finding dead pieces at same position
-            const pieceIndex = gameState.pieces.findIndex(p => p.alive && p.q === piece.q && p.r === piece.r);
+            if (gameState.phase === 'ended') return;
 
-            // If piece not found, return early
-            if (pieceIndex < 0) {
-                console.error('applyDamage: piece not found at', piece.q, piece.r);
-                return;
-            }
+            // Find ALL pieces at this location to handle Ghost + Summoner overlap
+            // We use coordinates to find everyone sharing the cell
+            const q = piece.q;
+            const r = piece.r;
 
-            // Use the actual piece from gameState.pieces to ensure we modify the right object
-            const actualPiece = gameState.pieces[pieceIndex];
+            // Collect all alive targets at this location BEFORE starting damage
+            const targets = gameState.pieces.filter(p => p.alive && p.q === q && p.r === r);
 
-            // Check if the attacker is one of the pieces pinning this target
-            const isPinningPiece = attackerIndex !== null &&
-                pieceIndex >= 0 &&
-                gameState.pinningMap.has(pieceIndex) &&
-                gameState.pinningMap.get(pieceIndex).has(attackerIndex);
+            targets.forEach(actualPiece => {
+                if (gameState.phase === 'ended') return;
 
-            // Check if piece would still be pinned without the attacker
-            // If yes, it dies immediately; if no, apply normal damage
-            if (actualPiece.pinned) {
-                if (attackerIndex !== null) {
-                    const stillPinnedWithoutAttacker = isStillPinnedWithoutAttacker(actualPiece, attackerIndex);
-                    if (stillPinnedWithoutAttacker) {
-                        // Still pinned without attacker - die immediately
+                // Find the piece index using reference (most reliable)
+                const pieceIndex = gameState.pieces.indexOf(actualPiece);
+                if (pieceIndex < 0 || !actualPiece.alive) return;
+
+                // Check if the attacker is one of the pieces pinning this target
+                const isPinningPiece = attackerIndex !== null &&
+                    gameState.pinningMap.has(pieceIndex) &&
+                    gameState.pinningMap.get(pieceIndex).has(attackerIndex);
+
+                // Check if piece would still be pinned without the attacker
+                if (actualPiece.pinned) {
+                    if (attackerIndex !== null) {
+                        const stillPinnedWithoutAttacker = isStillPinnedWithoutAttacker(actualPiece, attackerIndex);
+                        if (stillPinnedWithoutAttacker) {
+                            actualPiece.alive = false;
+                            detonateBombsOnUnit(pieceIndex);
+                            detonateBombsOwnedBy(pieceIndex);
+                            if (PIECE_TYPES[actualPiece.type].isKing) {
+                                addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
+                                endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
+                            } else {
+                                addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[actualPiece.type].name} destroyed (pinned)`, actualPiece.player);
+                            }
+                            return;
+                        }
+                    } else {
                         actualPiece.alive = false;
-                        // Detonate any bombs attached to or owned by this unit
                         detonateBombsOnUnit(pieceIndex);
                         detonateBombsOwnedBy(pieceIndex);
                         if (PIECE_TYPES[actualPiece.type].isKing) {
@@ -2875,70 +2896,47 @@
                         }
                         return;
                     }
-                    // Not pinned without attacker - continue to normal damage logic below
-                } else {
-                    // Pinned, but no attacker specified - die immediately
-                    actualPiece.alive = false;
-                    // Detonate any bombs attached to or owned by this unit
-                    detonateBombsOnUnit(pieceIndex);
-                    detonateBombsOwnedBy(pieceIndex);
-                    if (PIECE_TYPES[actualPiece.type].isKing) {
-                        addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
+                }
+
+                // Handle King special case
+                if (PIECE_TYPES[actualPiece.type].isKing) {
+                    if (!actualPiece.pinned) return;
+                    actualPiece.hp -= damage;
+                    if (actualPiece.hp <= 0) {
+                        actualPiece.alive = false;
+                        detonateBombsOnUnit(pieceIndex);
+                        detonateBombsOwnedBy(pieceIndex);
+                        addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed!`, 'system');
                         endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
-                    } else {
-                        addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[actualPiece.type].name} destroyed (pinned)`, actualPiece.player);
                     }
                     return;
                 }
-            }
 
-            // Handle King special case
-            if (PIECE_TYPES[actualPiece.type].isKing) {
-                // If we got here, King was pinned but is no longer pinned after removing attacker
-                // OR King is not pinned at all
-                // King can only be damaged if it was pinned and no longer pinned after removing attacker
-                if (!actualPiece.pinned) {
-                    // King not pinned - cannot be damaged
-                    return;
-                }
-                // King was pinned but no longer pinned - apply normal damage
                 actualPiece.hp -= damage;
                 if (actualPiece.hp <= 0) {
                     actualPiece.alive = false;
-                    // Detonate any bombs attached to or owned by this unit
                     detonateBombsOnUnit(pieceIndex);
                     detonateBombsOwnedBy(pieceIndex);
-                    addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed!`, 'system');
-                    endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
-                }
-                return;
-            }
 
-            actualPiece.hp -= damage;
-            if (actualPiece.hp <= 0) {
-                actualPiece.alive = false;
-                // Detonate any bombs attached to or owned by this unit
-                detonateBombsOnUnit(pieceIndex);
-                detonateBombsOwnedBy(pieceIndex);
-                // Clean up ghosts array if this was a ghost
-                if (actualPiece.type === 'GHOST') {
-                    gameState.ghosts = gameState.ghosts.filter(g =>
-                        !(g.q === actualPiece.q && g.r === actualPiece.r && g.owner === actualPiece.summonerIndex)
-                    );
-                }
-                // If this was a Knight, kill its ghost too
-                if (actualPiece.type === 'KNIGHT') {
-                    const ownedGhost = gameState.pieces.find(p =>
-                        p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
-                    );
-                    if (ownedGhost) {
-                        ownedGhost.alive = false;
-                        gameState.ghosts = gameState.ghosts.filter(g => g.owner !== pieceIndex);
-                        addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} Soul Echo fades away...`, actualPiece.player);
+                    if (actualPiece.type === 'GHOST') {
+                        gameState.ghosts = gameState.ghosts.filter(g =>
+                            !(g.q === actualPiece.q && g.r === actualPiece.r && g.owner === actualPiece.summonerIndex)
+                        );
                     }
+
+                    if (actualPiece.type === 'KNIGHT') {
+                        const ownedGhost = gameState.pieces.find(p =>
+                            p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
+                        );
+                        if (ownedGhost) {
+                            ownedGhost.alive = false;
+                            gameState.ghosts = gameState.ghosts.filter(g => g.owner !== pieceIndex);
+                            addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} Soul Echo fades away...`, actualPiece.player);
+                        }
+                    }
+                    addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[actualPiece.type].name} destroyed`, actualPiece.player);
                 }
-                addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[actualPiece.type].name} destroyed`, actualPiece.player);
-            }
+            });
         }
 
         function updatePins() {
@@ -2990,18 +2988,18 @@
                             if (step.q === ally1.q && step.r === ally1.r) return;
                             if (step.q === ally2.q && step.r === ally2.r) return;
 
-                            const enemy = getPieceAt(step.q, step.r);
-                            if (enemy && enemy.player !== activePlayer && enemy.alive) {
+                            const enemies = gameState.pieces.filter(p => p.alive && p.q === step.q && p.r === step.r && p.player !== activePlayer);
+                            enemies.forEach(enemy => {
                                 enemy.pinned = true;
 
                                 // Track which allies are pinning this enemy
-                                const enemyIndex = gameState.pieces.findIndex(p => p === enemy);
+                                const enemyIndex = gameState.pieces.indexOf(enemy);
                                 if (!gameState.pinningMap.has(enemyIndex)) {
                                     gameState.pinningMap.set(enemyIndex, new Set());
                                 }
                                 gameState.pinningMap.get(enemyIndex).add(ally1Index);
                                 gameState.pinningMap.get(enemyIndex).add(ally2Index);
-                            }
+                            });
                         });
                     });
                 }
@@ -3034,18 +3032,18 @@
                             if (step.q === ally1.q && step.r === ally1.r) return;
                             if (step.q === ally2.q && step.r === ally2.r) return;
 
-                            const enemy = getPieceAt(step.q, step.r);
-                            if (enemy && enemy.player !== otherPlayer && enemy.alive) {
+                            const enemies = gameState.pieces.filter(p => p.alive && p.q === step.q && p.r === step.r && p.player !== otherPlayer);
+                            enemies.forEach(enemy => {
                                 enemy.pinned = true;
 
                                 // Track which allies are pinning this enemy
-                                const enemyIndex = gameState.pieces.findIndex(p => p === enemy);
+                                const enemyIndex = gameState.pieces.indexOf(enemy);
                                 if (!gameState.pinningMap.has(enemyIndex)) {
                                     gameState.pinningMap.set(enemyIndex, new Set());
                                 }
                                 gameState.pinningMap.get(enemyIndex).add(ally1Index);
                                 gameState.pinningMap.get(enemyIndex).add(ally2Index);
-                            }
+                            });
                         });
                     });
                 }
