@@ -1020,10 +1020,11 @@
         const PIECE_TYPES = {
             KING: { symbol: '♚', name: 'King', defaultHP: Infinity, isKing: true },
             PAWN: { symbol: '♟', name: 'Pawn', defaultHP: 2, isKing: false },
-            KNIGHT: { symbol: '♞', name: 'Knight', defaultHP: 4, isKing: false },
+            KNIGHT: { symbol: '🐍', name: 'Snake', defaultHP: 4, isKing: false },
             ROOK: { symbol: '🛡️', name: 'Shield', defaultHP: 6, isKing: false },
             BISHOP: { symbol: '💣', name: 'Bomber', defaultHP: 4, isKing: false },
             ARCHER: { symbol: '☾', name: 'Archer', defaultHP: 4, isKing: false },
+            GHOST: { symbol: '👻', name: 'Soul Echo', defaultHP: 1, isKing: false, isGhost: true },
         };
 
         // Game state
@@ -1074,7 +1075,12 @@
 
             // Bomb State
             bombs: [], // { id, owner: pieceIndex, type: 'cell'|'unit', q, r, targetUnitIndex }
-            bombTargetingMode: false
+            bombTargetingMode: false,
+
+            // Ghost State
+            ghosts: [], // { owner: pieceIndex, q, r, player }
+            ghostTargetingMode: false,
+            ghostTargetingKnight: null // pieceIndex of the Knight using Use Ghost
         };
 
         // Movement templates
@@ -1126,6 +1132,13 @@
                 template: MOVEMENT_TEMPLATES.FREE_MOTION,
                 hp: 4,
                 ramDamage: 2
+            };
+            // Ghost: cannot move, just a static piece
+            gameState.unitConfigs['GHOST'] = {
+                range: 0,
+                template: MOVEMENT_TEMPLATES.FREE_MOTION,
+                hp: 1,
+                ramDamage: 0
             };
         }
 
@@ -1640,30 +1653,32 @@
                     g.appendChild(borderCircle);
                 }
 
-                // Piece background
-                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                circle.setAttribute('cx', x);
-                circle.setAttribute('cy', y);
-                circle.setAttribute('r', HEX_SIZE * 0.6);
+                // Piece background (skip for ghosts - they're spectral)
+                if (piece.type !== 'GHOST') {
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('cx', x);
+                    circle.setAttribute('cy', y);
+                    circle.setAttribute('r', HEX_SIZE * 0.6);
 
-                let fillColor, strokeColor;
-                if (piece.player === 1) {
-                    fillColor = '#c94c4c'; // var(--player1)
-                    strokeColor = '#8a3535'; // var(--player1-dim)
-                } else {
-                    if (gameState.gameMode === 'vsCPU' && piece.player === gameState.cpuPlayer) {
-                        fillColor = '#a855f7'; // var(--player-cpu)
-                        strokeColor = '#7c3aed'; // var(--player-cpu-dim)
+                    let fillColor, strokeColor;
+                    if (piece.player === 1) {
+                        fillColor = '#c94c4c'; // var(--player1)
+                        strokeColor = '#8a3535'; // var(--player1-dim)
                     } else {
-                        fillColor = '#4c8bc9'; // var(--player2)
-                        strokeColor = '#35628a'; // var(--player2-dim)
+                        if (gameState.gameMode === 'vsCPU' && piece.player === gameState.cpuPlayer) {
+                            fillColor = '#a855f7'; // var(--player-cpu)
+                            strokeColor = '#7c3aed'; // var(--player-cpu-dim)
+                        } else {
+                            fillColor = '#4c8bc9'; // var(--player2)
+                            strokeColor = '#35628a'; // var(--player2-dim)
+                        }
                     }
-                }
 
-                circle.setAttribute('fill', fillColor);
-                circle.setAttribute('stroke', strokeColor);
-                circle.setAttribute('stroke-width', 2);
-                g.appendChild(circle);
+                    circle.setAttribute('fill', fillColor);
+                    circle.setAttribute('stroke', strokeColor);
+                    circle.setAttribute('stroke-width', 2);
+                    g.appendChild(circle);
+                }
 
                 // Diagonal stripe overlay for pinned pieces (behind text)
                 if (piece.pinned) {
@@ -1676,7 +1691,36 @@
                     g.appendChild(stripeOverlay);
                 }
 
-                if (piece.type === 'ARCHER') {
+                if (piece.type === 'KNIGHT') {
+                    // Cobra SVG
+                    const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    iconGroup.setAttribute('transform', `translate(${x}, ${y}) scale(1.1)`);
+
+                    // Body (Stroke)
+                    const body = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    body.setAttribute('d', 'M 0 9 Q 1 7 4 7 Q 7 7 7 4 Q 7 1 0 1 Q -7 1 -7 -2 Q -7 -5 0 -5');
+                    body.setAttribute('fill', 'none');
+                    body.setAttribute('stroke', 'white');
+                    body.setAttribute('stroke-width', '2.5');
+                    body.setAttribute('stroke-linecap', 'round');
+                    iconGroup.appendChild(body);
+
+                    // Head (Diamond Fill)
+                    const head = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    head.setAttribute('d', 'M 0 -4 L 3.5 -7.5 L 0 -11 L -3.5 -7.5 Z');
+                    head.setAttribute('fill', 'white');
+                    iconGroup.appendChild(head);
+
+                    // Tongue
+                    const tongue = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    tongue.setAttribute('d', 'M 0 -11 L -1.5 -12.5 M 0 -11 L 1.5 -12.5');
+                    tongue.setAttribute('stroke', 'white');
+                    tongue.setAttribute('stroke-width', '1.5');
+                    tongue.setAttribute('stroke-linecap', 'round');
+                    iconGroup.appendChild(tongue);
+
+                    g.appendChild(iconGroup);
+                } else if (piece.type === 'ARCHER') {
                     // Use SVG paths for cleaner, non-emoji look
                     const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
 
@@ -1795,6 +1839,48 @@
                     iconGroup.appendChild(shine);
                     iconGroup.setAttribute('pointer-events', 'none');
                     g.appendChild(iconGroup);
+                } else if (piece.type === 'GHOST') {
+                    // Ghost piece - use spectral ghost icon
+                    const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    // Scale increased to 2.2 (2x original 1.1)
+                    iconGroup.setAttribute('transform', `translate(${x}, ${y}) scale(2.2)`);
+                    iconGroup.setAttribute('opacity', '0.6');
+                    iconGroup.setAttribute('pointer-events', 'none');
+
+                    // Determine ghost color based on player
+                    let ghostColor;
+                    if (piece.player === 1) {
+                        ghostColor = '#c94c4c';
+                    } else {
+                        if (gameState.gameMode === 'vsCPU' && piece.player === gameState.cpuPlayer) {
+                            ghostColor = '#a855f7';
+                        } else {
+                            ghostColor = '#4c8bc9';
+                        }
+                    }
+
+                    const ghostBody = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    // Classic ghost shape: rounded top, wavy bottom
+                    ghostBody.setAttribute('d', 'M -6 4 L -6 -2 Q -6 -8 0 -8 Q 6 -8 6 -2 L 6 4 Q 4 2 2 4 Q 0 2 -2 4 Q -4 2 -6 4 Z');
+                    ghostBody.setAttribute('fill', ghostColor);
+                    iconGroup.appendChild(ghostBody);
+
+                    // Small ghost eyes (white)
+                    const eye1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    eye1.setAttribute('cx', -2);
+                    eye1.setAttribute('cy', -2);
+                    eye1.setAttribute('r', 1);
+                    eye1.setAttribute('fill', 'white');
+                    iconGroup.appendChild(eye1);
+
+                    const eye2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    eye2.setAttribute('cx', 2);
+                    eye2.setAttribute('cy', -2);
+                    eye2.setAttribute('r', 1);
+                    eye2.setAttribute('fill', 'white');
+                    iconGroup.appendChild(eye2);
+
+                    g.appendChild(iconGroup);
                 } else {
                     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                     text.setAttribute('x', x);
@@ -1807,27 +1893,29 @@
                     g.appendChild(text);
                 }
 
-                // Stats indicators
+                // Stats indicators (skip for ghosts)
                 const config = gameState.unitConfigs[piece.type];
 
-                // HP indicator (not for King)
-                if (!PIECE_TYPES[piece.type].isKing && piece.hp < Infinity) {
-                    const hpText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                    hpText.setAttribute('x', x + HEX_SIZE * 0.4);
-                    hpText.setAttribute('y', y - HEX_SIZE * 0.3);
-                    hpText.classList.add('piece-stat', 'hp');
-                    hpText.textContent = `♥${piece.hp}`;
-                    g.appendChild(hpText);
-                }
+                if (piece.type !== 'GHOST') {
+                    // HP indicator (not for King)
+                    if (!PIECE_TYPES[piece.type].isKing && piece.hp < Infinity) {
+                        const hpText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        hpText.setAttribute('x', x + HEX_SIZE * 0.4);
+                        hpText.setAttribute('y', y - HEX_SIZE * 0.3);
+                        hpText.classList.add('piece-stat', 'hp');
+                        hpText.textContent = `♥${piece.hp}`;
+                        g.appendChild(hpText);
+                    }
 
-                // Damage indicator
-                if (config.ramDamage > 0) {
-                    const dmgText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                    dmgText.setAttribute('x', x - HEX_SIZE * 0.4);
-                    dmgText.setAttribute('y', y - HEX_SIZE * 0.3);
-                    dmgText.classList.add('piece-stat', 'dmg');
-                    dmgText.textContent = `🗡${config.ramDamage}`;
-                    g.appendChild(dmgText);
+                    // Damage indicator
+                    if (config.ramDamage > 0) {
+                        const dmgText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        dmgText.setAttribute('x', x - HEX_SIZE * 0.4);
+                        dmgText.setAttribute('y', y - HEX_SIZE * 0.3);
+                        dmgText.classList.add('piece-stat', 'dmg');
+                        dmgText.textContent = `🗡${config.ramDamage}`;
+                        g.appendChild(dmgText);
+                    }
                 }
 
                 // Range indicator
@@ -2277,8 +2365,8 @@
         }
 
         function getValidNextSteps(piece, currentPath) {
-            // Pinned pieces cannot move
-            if (!piece.alive || piece.pinned) return [];
+            // Pinned pieces and ghosts cannot move
+            if (!piece.alive || piece.pinned || piece.type === 'GHOST') return [];
 
             // Get valid adjacent hexes for the next step in path building
             const config = gameState.unitConfigs[piece.type];
@@ -2356,6 +2444,48 @@
                 if (alreadyInPath) return;
 
                 const occupant = getPieceAt(next.q, next.r);
+                const ghostAtPosition = getGhostPieceAt(next.q, next.r);
+
+                // Ghost handling: Summoner can pass through/land on their own ghost freely
+                if (ghostAtPosition && ghostAtPosition.summonerIndex === gameState.selectedPiece) {
+                    // Summoner found their own ghost - check if there's another occupant besides the ghost
+                    const otherOccupant = gameState.pieces.find(p =>
+                        p.alive && p.q === next.q && p.r === next.r && p.type !== 'GHOST'
+                    );
+                    if (otherOccupant) {
+                        // Ghost overlaps with another piece - use that piece as occupant
+                        validNext.push({
+                            q: next.q,
+                            r: next.r,
+                            hasEnemy: otherOccupant.player !== piece.player,
+                            hasFriendly: otherOccupant.player === piece.player,
+                            occupant: otherOccupant
+                        });
+                    } else {
+                        // Only ghost at this position - treat as empty space for summoner
+                        validNext.push({
+                            q: next.q,
+                            r: next.r,
+                            hasEnemy: false,
+                            hasFriendly: false,
+                            occupant: null
+                        });
+                    }
+                    return;
+                }
+
+                // For non-summoners: treat ghost as an enemy piece
+                if (ghostAtPosition) {
+                    // There's an enemy ghost here - treat it as an enemy
+                    validNext.push({
+                        q: next.q,
+                        r: next.r,
+                        hasEnemy: ghostAtPosition.player !== piece.player,
+                        hasFriendly: ghostAtPosition.player === piece.player,
+                        occupant: ghostAtPosition
+                    });
+                    return;
+                }
 
                 // Can pass through friendlies, but can't end on them
                 // Can pass through enemies (will damage), can end on them if they'd die
@@ -2389,6 +2519,11 @@
             }
             const ramDamage = gameState.unitConfigs[attackingPiece.type].ramDamage;
             return targetPiece.hp <= damageTotal * ramDamage;
+        }
+
+        function getGhostAt(q, r) {
+            if (!gameState.ghosts) return null;
+            return gameState.ghosts.find(g => g.q === q && g.r === r);
         }
 
         function getPieceAt(q, r) {
@@ -2785,6 +2920,23 @@
                 // Detonate any bombs attached to or owned by this unit
                 detonateBombsOnUnit(pieceIndex);
                 detonateBombsOwnedBy(pieceIndex);
+                // Clean up ghosts array if this was a ghost
+                if (actualPiece.type === 'GHOST') {
+                    gameState.ghosts = gameState.ghosts.filter(g =>
+                        !(g.q === actualPiece.q && g.r === actualPiece.r && g.owner === actualPiece.summonerIndex)
+                    );
+                }
+                // If this was a Knight, kill its ghost too
+                if (actualPiece.type === 'KNIGHT') {
+                    const ownedGhost = gameState.pieces.find(p =>
+                        p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
+                    );
+                    if (ownedGhost) {
+                        ownedGhost.alive = false;
+                        gameState.ghosts = gameState.ghosts.filter(g => g.owner !== pieceIndex);
+                        addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} Soul Echo fades away...`, actualPiece.player);
+                    }
+                }
                 addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[actualPiece.type].name} destroyed`, actualPiece.player);
             }
         }
@@ -3346,6 +3498,17 @@
                 });
             }
 
+            // Rotate each ghost
+            if (gameState.ghosts) {
+                gameState.ghosts.forEach(ghost => {
+                    if (getRing(ghost.q, ghost.r) === ring) {
+                        const rotated = rotateHexAroundCenter(ghost.q, ghost.r, clockwise ? 1 : -1);
+                        ghost.q = rotated.q;
+                        ghost.r = rotated.r;
+                    }
+                });
+            }
+
             addLog(`${gameState.currentPlayer === 1 ? 'P1' : 'P2'} King rotates ring ${ring} ${clockwise ? 'CW' : 'CCW'}`, gameState.currentPlayer);
 
             // Update pins after rotation
@@ -3367,7 +3530,7 @@
         function checkArmyElimination() {
             [1, 2].forEach(player => {
                 const nonKingPieces = gameState.pieces.filter(p =>
-                    p.player === player && p.alive && !PIECE_TYPES[p.type].isKing
+                    p.player === player && p.alive && !PIECE_TYPES[p.type].isKing && p.type !== 'GHOST'
                 );
                 if (nonKingPieces.length === 0) {
                     endGame(player === 1 ? 2 : 1, 'elimination');
@@ -3379,7 +3542,7 @@
             [1, 2].forEach(player => {
                 const enemyPlayer = player === 1 ? 2 : 1;
                 const enemyPieces = gameState.pieces.filter(p =>
-                    p.player === enemyPlayer && p.alive
+                    p.player === enemyPlayer && p.alive && p.type !== 'GHOST'
                 );
 
                 // If there are no enemy pieces, skip (already handled by elimination check)
@@ -3555,7 +3718,8 @@
                 actionsRemaining: gameState.actionsRemaining,
                 hasAnyPieceMoved: gameState.hasAnyPieceMoved,
                 forceFields: JSON.parse(JSON.stringify(gameState.forceFields)),
-                bombs: JSON.parse(JSON.stringify(gameState.bombs))
+                bombs: JSON.parse(JSON.stringify(gameState.bombs)),
+                ghosts: JSON.parse(JSON.stringify(gameState.ghosts))
             };
         }
 
@@ -3573,6 +3737,11 @@
                 gameState.bombs = JSON.parse(JSON.stringify(gameState.turnSnapshot.bombs));
             } else {
                 gameState.bombs = [];
+            }
+            if (gameState.turnSnapshot.ghosts) {
+                gameState.ghosts = JSON.parse(JSON.stringify(gameState.turnSnapshot.ghosts));
+            } else {
+                gameState.ghosts = [];
             }
 
             gameState.lastTimestamp = performance.now();
@@ -3722,6 +3891,25 @@
                 return;
             }
 
+            // In ghost targeting mode, clicking on an ally piece selects it as the target
+            if (gameState.ghostTargetingMode && gameState.ghostTargetingKnight !== null) {
+                const knight = gameState.pieces[gameState.ghostTargetingKnight];
+
+                // Check if valid target (ally, not King, not Ghost - INCLUDING the Knight itself)
+                if (piece.player === knight.player &&
+                    !PIECE_TYPES[piece.type].isKing &&
+                    piece.type !== 'GHOST') {
+                    executeUseGhost(gameState.ghostTargetingKnight, index);
+                } else if (PIECE_TYPES[piece.type].isKing) {
+                    addLog('Cannot use Ghost on King!', 'system');
+                } else if (piece.type === 'GHOST') {
+                    addLog('Cannot use Ghost on another Ghost!', 'system');
+                } else if (piece.player !== knight.player) {
+                    addLog('Can only use Ghost on ally pieces!', 'system');
+                }
+                return;
+            }
+
             // If selecting a different piece, check for bomb targeting
             if (gameState.bombTargetingMode && gameState.selectedPiece !== index) {
                 const targetPiece = gameState.pieces[index];
@@ -3800,9 +3988,9 @@
             gameState.selectedPiece = pieceIndex;
 
             // Show Alt Move button for power pieces (King, Knight, Rook, Bishop, Lance)
-            // Power pieces are everyone except Pawns
+            // Power pieces are everyone except Pawns and Ghosts
             const rotateBtn = document.getElementById('btn-rotate');
-            if (piece.type !== 'PAWN' && !piece.pinned) {
+            if (piece.type !== 'PAWN' && piece.type !== 'GHOST' && !piece.pinned) {
                 rotateBtn.style.display = 'flex';
                 // Unified style for all power pieces as requested
                 rotateBtn.className = 'btn alt-move';
@@ -3826,6 +4014,25 @@
                 } else if (piece.type === 'BISHOP') {
                     const hasBomb = gameState.bombs && gameState.bombs.some(b => b.owner === pieceIndex);
                     rotateBtn.innerHTML = hasBomb ? '⚡ Remove Bomb' : '⚡ Sticky Bomb';
+                } else if (piece.type === 'KNIGHT') {
+                    const existingGhost = gameState.pieces.find(p =>
+                        p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
+                    );
+                    if (existingGhost) {
+                        // Check if Knight is on same cell as ghost
+                        const onSameCell = piece.q === existingGhost.q && piece.r === existingGhost.r;
+                        if (onSameCell) {
+                            rotateBtn.innerHTML = '👻 Use Ghost';
+                            rotateBtn.disabled = true;
+                            rotateBtn.style.opacity = '0.5';
+                            rotateBtn.style.cursor = 'not-allowed';
+                            rotateBtn.title = 'Move away from ghost to use it';
+                        } else {
+                            rotateBtn.innerHTML = '👻 Use Ghost';
+                        }
+                    } else {
+                        rotateBtn.innerHTML = '⚡ Summon Ghost';
+                    }
                 } else {
                     rotateBtn.innerHTML = '⚡ Alt Move';
                 }
@@ -3857,6 +4064,10 @@
             }
             if (gameState.bombTargetingMode) {
                 gameState.bombTargetingMode = false;
+            }
+            if (gameState.ghostTargetingMode) {
+                gameState.ghostTargetingMode = false;
+                gameState.ghostTargetingKnight = null;
             }
 
             clearHighlights();
@@ -3911,9 +4122,13 @@
             gameState.previewPinningPaths = [];
             if (gameState.currentPath.length > 0) {
                 const destination = gameState.currentPath[gameState.currentPath.length - 1];
-                // Only calculate preview if destination is valid (not a friendly unit)
+                // Only calculate preview if destination is valid (not a friendly unit, unless it's own ghost)
                 const occupant = getPieceAt(destination.q, destination.r);
-                if (!occupant || occupant.player !== piece.player) {
+                const ghostAtDest = getGhostPieceAt(destination.q, destination.r);
+                const isSummonerOnOwnGhost = ghostAtDest &&
+                    ghostAtDest.summonerIndex === gameState.pathStartPiece;
+
+                if (!occupant || occupant.player !== piece.player || isSummonerOnOwnGhost) {
                     try {
                         const previewPaths = calculatePreviewPinning(
                             gameState.pathStartPiece,
@@ -3953,9 +4168,15 @@
 
             // Check if destination is valid
             const occupant = getPieceAt(destination.q, destination.r);
+            const ghostAtDest = getGhostPieceAt(destination.q, destination.r);
 
-            // Cannot land on friendly
-            if (occupant && occupant.player === piece.player) {
+            // Check if this is the summoner landing on their own ghost
+            const isSummonerLandingOnOwnGhost = ghostAtDest &&
+                ghostAtDest.summonerIndex === gameState.pathStartPiece &&
+                (!occupant || occupant === ghostAtDest);
+
+            // Cannot land on friendly (unless it's the summoner landing on their own ghost)
+            if (occupant && occupant.player === piece.player && !isSummonerLandingOnOwnGhost) {
                 addLog('Cannot land on friendly unit!', 'system');
                 return;
             }
@@ -4085,6 +4306,158 @@
             setTimeout(() => {
                 if (g.parentNode) svg.removeChild(g);
             }, 700);
+        }
+
+        // ============================================
+        // KNIGHT GHOST
+        // ============================================
+        function activateGhost(pieceIndex) {
+            const piece = gameState.pieces[pieceIndex];
+
+            // Check if Knight already has an active ghost
+            const existingGhost = gameState.pieces.find(p =>
+                p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
+            );
+
+            if (existingGhost) {
+                // Check if Knight is on same cell as ghost - shouldn't happen but safety check
+                if (piece.q === existingGhost.q && piece.r === existingGhost.r) {
+                    addLog('Move away from ghost to use it!', 'system');
+                    return;
+                }
+
+                // USE GHOST mode - enter targeting mode to select an ally
+                enterGhostTargetingMode(pieceIndex);
+                return;
+            }
+
+            // SUMMON GHOST mode - create new ghost
+            // Clean up old ghosts array entries (shouldn't be any, but just in case)
+            gameState.ghosts = gameState.ghosts.filter(g => g.owner !== pieceIndex);
+
+            // Create ghost as an actual piece
+            const ghostPiece = {
+                type: 'GHOST',
+                player: piece.player,
+                q: piece.q,
+                r: piece.r,
+                hp: 1,
+                maxHP: 1,
+                alive: true,
+                pinned: false,
+                altMoveUnlocked: false,
+                summonerIndex: pieceIndex // Track which Knight created this ghost
+            };
+
+            gameState.pieces.push(ghostPiece);
+
+            // Also add to ghosts array for visual rendering and rotation logic
+            gameState.ghosts.push({
+                owner: pieceIndex,
+                q: piece.q,
+                r: piece.r,
+                player: piece.player
+            });
+
+            addLog(`${PIECE_TYPES[piece.type].name} summons a Soul Echo!`, piece.player);
+            useAction(pieceIndex, 'ALT');
+            cancelPathBuilding();
+        }
+
+        // Helper to find ghost piece by position
+        function getGhostPieceAt(q, r) {
+            return gameState.pieces.find(p => p.alive && p.type === 'GHOST' && p.q === q && p.r === r);
+        }
+
+        function enterGhostTargetingMode(knightIndex) {
+            gameState.ghostTargetingMode = true;
+            gameState.ghostTargetingKnight = knightIndex;
+            gameState.selectedPiece = knightIndex;
+
+            addLog('Select a piece to use Ghost on (yourself or ally, not King)', 'system');
+
+            // Show cancel button
+            document.getElementById('btn-cancel-path').style.display = 'inline-block';
+
+            // Highlight valid ally pieces (same player, not King, not Ghost, INCLUDING the Knight itself)
+            const knight = gameState.pieces[knightIndex];
+            clearHighlights();
+
+            gameState.pieces.forEach((p, idx) => {
+                if (p.alive && p.player === knight.player &&
+                    !PIECE_TYPES[p.type].isKing && p.type !== 'GHOST') {
+                    const hex = document.querySelector(`.hex[data-q="${p.q}"][data-r="${p.r}"]`);
+                    if (hex) hex.classList.add('valid-move');
+                }
+            });
+
+            updateUI();
+        }
+
+        function exitGhostTargetingMode() {
+            gameState.ghostTargetingMode = false;
+            gameState.ghostTargetingKnight = null;
+            clearHighlights();
+            document.getElementById('btn-cancel-path').style.display = 'none';
+            updateUI();
+        }
+
+        function executeUseGhost(knightIndex, targetPieceIndex) {
+            const knight = gameState.pieces[knightIndex];
+            const target = gameState.pieces[targetPieceIndex];
+
+            if (!target || !target.alive) {
+                addLog('Invalid target!', 'system');
+                exitGhostTargetingMode();
+                return;
+            }
+
+            // Validate target is valid (same player, not King, not Ghost)
+            if (target.player !== knight.player || PIECE_TYPES[target.type].isKing || target.type === 'GHOST') {
+                addLog('Invalid target for Use Ghost!', 'system');
+                exitGhostTargetingMode();
+                return;
+            }
+
+            // Find the Knight's ghost
+            const ghost = gameState.pieces.find(p =>
+                p.alive && p.type === 'GHOST' && p.summonerIndex === knightIndex
+            );
+
+            if (!ghost) {
+                addLog('Ghost not found!', 'system');
+                exitGhostTargetingMode();
+                return;
+            }
+
+            // Store positions
+            const targetQ = target.q;
+            const targetR = target.r;
+            const ghostQ = ghost.q;
+            const ghostR = ghost.r;
+
+            // Swap positions: target goes to ghost position, ghost goes to target position
+            target.q = ghostQ;
+            target.r = ghostR;
+            ghost.q = targetQ;
+            ghost.r = targetR;
+
+            // Also update the ghosts array entry
+            const ghostEntry = gameState.ghosts.find(g => g.owner === knightIndex);
+            if (ghostEntry) {
+                ghostEntry.q = targetQ;
+                ghostEntry.r = targetR;
+            }
+
+            addLog(`${PIECE_TYPES[target.type].name} swaps positions with Soul Echo!`, knight.player);
+            useAction(knightIndex, 'ALT');
+
+            // Update pins after the swap
+            updatePins();
+            renderPieces();
+
+            exitGhostTargetingMode();
+            cancelPathBuilding();
         }
 
         function detonateBomb(bomb) {
@@ -4258,7 +4631,7 @@
                 const container = document.getElementById(`army-p${player}`);
                 container.innerHTML = '';
 
-                gameState.pieces.filter(p => p.player === player).forEach((piece, idx) => {
+                gameState.pieces.filter(p => p.player === player && p.type !== 'GHOST').forEach((piece, idx) => {
                     const div = document.createElement('div');
                     div.className = `army-piece player${player}`;
 
@@ -4294,6 +4667,18 @@
                             <rect x="-1.5" y="-7.5" width="3" height="1.5" fill="${strokeColor}" rx="0.3"/>
                             <circle cx="0" cy="1.5" r="6" stroke-width="2"/>
                             <path d="M -2.5 -1 Q -3.5 1.5 -2.5 4" stroke-width="1"/>
+                        </svg>`;
+                        div.style.display = 'flex';
+                        div.style.alignItems = 'center';
+                        div.style.justifyContent = 'center';
+                    } else if (piece.type === 'KNIGHT') {
+                        const svgSize = 24;
+                        const strokeColor = piece.pinned ? '#5a5a5a' : 'white';
+                        // Uploaded Snake Icon
+                        div.innerHTML = `<svg width="${svgSize}" height="${svgSize}" viewBox="-10 -13 20 26" style="vertical-align: middle;">
+                            <path d="M 0 9 Q 1 7 4 7 Q 7 7 7 4 Q 7 1 0 1 Q -7 1 -7 -2 Q -7 -5 0 -5" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round"/>
+                            <path d="M 0 -4 L 3.5 -7.5 L 0 -11 L -3.5 -7.5 Z" fill="${strokeColor}"/>
+                            <path d="M 0 -11 L -1.5 -12.5 M 0 -11 L 1.5 -12.5" stroke="${strokeColor}" stroke-width="1.5" stroke-linecap="round"/>
                         </svg>`;
                         div.style.display = 'flex';
                         div.style.alignItems = 'center';
@@ -4337,7 +4722,7 @@
         function setupUnitEditor() {
             const selector = document.getElementById('unit-selector');
 
-            Object.entries(PIECE_TYPES).forEach(([type, info]) => {
+            Object.entries(PIECE_TYPES).filter(([type]) => type !== 'GHOST').forEach(([type, info]) => {
                 const btn = document.createElement('button');
                 btn.className = 'unit-btn';
                 btn.dataset.type = type;
@@ -4367,6 +4752,16 @@
                             <path d="M -6 -7 H 6 L 6 -1 Q 6 6 0 9 Q -6 6 -6 -1 Z" stroke-width="2"/>
                             <path d="M 0 -7 L 0 9" stroke-width="1.5"/>
                             <path d="M -5.5 -2 L 5.5 -2" stroke-width="1"/>
+                        </svg>`;
+                    btn.style.display = 'flex';
+                    btn.style.alignItems = 'center';
+                    btn.style.justifyContent = 'center';
+                } else if (type === 'KNIGHT') {
+                    // Uploaded Snake Icon
+                    btn.innerHTML = `<svg width="24" height="24" viewBox="-10 -13 20 26" style="vertical-align: middle;">
+                            <path d="M 0 9 Q 1 7 4 7 Q 7 7 7 4 Q 7 1 0 1 Q -7 1 -7 -2 Q -7 -5 0 -5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                            <path d="M 0 -4 L 3.5 -7.5 L 0 -11 L -3.5 -7.5 Z" fill="currentColor"/>
+                            <path d="M 0 -11 L -1.5 -12.5 M 0 -11 L 1.5 -12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                         </svg>`;
                     btn.style.display = 'flex';
                     btn.style.alignItems = 'center';
@@ -4738,6 +5133,8 @@
                         } else {
                             enterLanceTargetingMode(gameState.selectedPiece);
                         }
+                    } else if (piece.type === 'KNIGHT') {
+                        activateGhost(gameState.selectedPiece);
                     } else if (piece.type === 'BISHOP') {
                         const bomb = gameState.bombs.find(b => b.owner === gameState.selectedPiece);
                         if (bomb) {
