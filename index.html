@@ -1075,6 +1075,7 @@
 
             // Bomb State
             bombs: [], // { id, owner: pieceIndex, type: 'cell'|'unit', q, r, targetUnitIndex }
+            pendingBombDetonations: [], // Bombs queued for detonation after move completes
             bombTargetingMode: false,
 
             // Ghost State
@@ -1288,221 +1289,94 @@
         }
 
         function placeArmy(player, kingCorner) {
-            // King at ring 5 corner
+            // 1. King at ring 5 corner
             createPiece('KING', player, kingCorner.q, kingCorner.r);
 
-            // Find direction toward center from king corner
-            // Calculate which direction points most toward (0,0)
-            let bestDir = 0;
-            let minDist = Infinity;
-            for (let dir = 0; dir < 6; dir++) {
-                const neighbor = hexNeighbor(kingCorner.q, kingCorner.r, dir);
-                const dist = hexDistance(0, 0, neighbor.q, neighbor.r);
-                if (dist < minDist) {
-                    minDist = dist;
-                    bestDir = dir;
+            // 2. Find all Ring 4 candidates within distance 2 of King
+            const r4Candidates = [];
+            const allR4 = getHexesInRing(4);
+            for (const hex of allR4) {
+                if (hexDistance(kingCorner.q, kingCorner.r, hex.q, hex.r) <= 2) {
+                    r4Candidates.push(hex);
                 }
             }
 
-            // Find hexes on ring 4 that are neighbors of the king
-            const ring4Candidates = [];
-            for (let dir = 0; dir < 6; dir++) {
-                const neighbor = hexNeighbor(kingCorner.q, kingCorner.r, dir);
-                if (getRing(neighbor.q, neighbor.r) === 4 && isValidHex(neighbor.q, neighbor.r)) {
-                    ring4Candidates.push({ pos: neighbor, dir: dir });
-                }
-            }
+            // 3. Sort candidates by their "transverse" position relative to the King -> Center axis
+            const vQ = -kingCorner.q;
+            const vR = -kingCorner.r;
 
-            // Sort by proximity to the "inward" direction
-            ring4Candidates.sort((a, b) => {
-                const aDist = Math.abs((a.dir - bestDir + 6) % 6);
-                const bDist = Math.abs((b.dir - bestDir + 6) % 6);
-                return aDist - bDist;
+            r4Candidates.sort((a, b) => {
+                const aQ = a.q - kingCorner.q;
+                const aR = a.r - kingCorner.r;
+                const crossA = vQ * aR - vR * aQ;
+                const bQ = b.q - kingCorner.q;
+                const bR = b.r - kingCorner.r;
+                const crossB = vQ * bR - vR * bQ;
+                return crossA - crossB;
             });
 
-            // Take first 3 positions for Bishop, Knight, Rook
-            const ring4Positions = ring4Candidates.slice(0, 3).map(c => c.pos);
-
-            // Ensure we have 3 positions (fallback to any ring 4 neighbors)
-            if (ring4Positions.length < 3) {
-                const allRing4 = getHexesInRing(4);
-                for (const hex of allRing4) {
-                    if (hexDistance(kingCorner.q, kingCorner.r, hex.q, hex.r) <= 2) {
-                        if (!ring4Positions.some(p => p.q === hex.q && p.r === hex.r)) {
-                            ring4Positions.push(hex);
-                            if (ring4Positions.length >= 3) break;
-                        }
-                    }
-                }
+            if (r4Candidates.length >= 3) {
+                createPiece('KNIGHT', player, r4Candidates[0].q, r4Candidates[0].r);
+                createPiece('ROOK', player, r4Candidates[1].q, r4Candidates[1].r);
+                createPiece('BISHOP', player, r4Candidates[2].q, r4Candidates[2].r);
+            } else if (r4Candidates.length > 0) {
+                createPiece('ROOK', player, r4Candidates[0].q, r4Candidates[0].r);
+                if (r4Candidates[1]) createPiece('KNIGHT', player, r4Candidates[1].q, r4Candidates[1].r);
             }
 
-            // Place Rook, Knight, Bishop on ring 4 (guaranteed 3 positions)
-            if (ring4Positions.length >= 1) {
-                createPiece('ROOK', player, ring4Positions[0].q, ring4Positions[0].r);
-            }
-            if (ring4Positions.length >= 2) {
-                createPiece('KNIGHT', player, ring4Positions[1].q, ring4Positions[1].r);
-            }
-            if (ring4Positions.length >= 3) {
-                createPiece('BISHOP', player, ring4Positions[2].q, ring4Positions[2].r);
-            }
 
-            // Ring 3: 3 Pawns next to the ring 4 pieces
+
+            // 4. Ring 3 Pawns (3 total)
+            const r4Positions = r4Candidates.slice(0, 3);
             const pawnPositions = [];
 
-            // Find hexes on ring 3 that are neighbors of the ring 4 pieces
-            for (const ring4Pos of ring4Positions) {
+            // For each R4 piece, find its most inward neighbor on R3
+            r4Positions.forEach(r4 => {
+                let bestPawn = null;
+                let minD = Infinity;
                 for (let dir = 0; dir < 6; dir++) {
-                    const neighbor = hexNeighbor(ring4Pos.q, ring4Pos.r, dir);
-                    if (getRing(neighbor.q, neighbor.r) === 3 &&
-                        isValidHex(neighbor.q, neighbor.r) &&
-                        !pawnPositions.some(p => p.q === neighbor.q && p.r === neighbor.r)) {
-                        pawnPositions.push(neighbor);
-                    }
-                }
-            }
-
-            // If we don't have 3 pawn positions, find more from ring 3
-            if (pawnPositions.length < 3) {
-                const allRing3 = getHexesInRing(3);
-                for (const hex of allRing3) {
-                    // Check if it's near any ring 4 piece
-                    let isNear = false;
-                    for (const ring4Pos of ring4Positions) {
-                        if (hexDistance(hex.q, hex.r, ring4Pos.q, ring4Pos.r) <= 2) {
-                            isNear = true;
-                            break;
+                    const n = hexNeighbor(r4.q, r4.r, dir);
+                    if (getRing(n.q, n.r) === 3 && isValidHex(n.q, n.r)) {
+                        const d = hexDistance(0, 0, n.q, n.r);
+                        if (d < minD) {
+                            minD = d;
+                            bestPawn = n;
                         }
                     }
-                    if (isNear && !pawnPositions.some(p => p.q === hex.q && p.r === hex.r)) {
-                        pawnPositions.push(hex);
+                }
+                if (bestPawn && !pawnPositions.some(p => p.q === bestPawn.q && p.r === bestPawn.r)) {
+                    pawnPositions.push(bestPawn);
+                }
+            });
+
+            // Fallback for pawns if overlaps occurred
+            if (pawnPositions.length < 3) {
+                const allRing3 = getHexesInRing(3);
+                allRing3.sort((a, b) => hexDistance(kingCorner.q, kingCorner.r, a.q, a.r) - hexDistance(kingCorner.q, kingCorner.r, b.q, b.r));
+                for (const p of allRing3) {
+                    if (!pawnPositions.some(prev => prev.q === p.q && prev.r === p.r)) {
+                        pawnPositions.push(p);
                         if (pawnPositions.length >= 3) break;
                     }
                 }
             }
+            pawnPositions.slice(0, 3).forEach(p => createPiece('PAWN', player, p.q, p.r));
 
-            // Place 3 Pawns (guaranteed to place all 3)
-            for (let i = 0; i < 3 && i < pawnPositions.length; i++) {
-                createPiece('PAWN', player, pawnPositions[i].q, pawnPositions[i].r);
-            }
-
-            // If we still don't have 3 pawns, place them anywhere on ring 3
-            let currentPawnCount = gameState.pieces.filter(p => p.player === player && p.type === 'PAWN').length;
-            if (currentPawnCount < 3) {
-                const allRing3 = getHexesInRing(3);
-                for (const hex of allRing3) {
-                    if (!getPieceAt(hex.q, hex.r) && currentPawnCount < 3) {
-                        createPiece('PAWN', player, hex.q, hex.r);
-                        currentPawnCount++;
-                    }
-                }
-            }
-
-            // Get all pawn positions for lance placement check
-            const pawnPositionsList = gameState.pieces
-                .filter(p => p.player === player && p.type === 'PAWN')
-                .map(p => ({ q: p.q, r: p.r }));
-
-            // Ring 2: Lance should be adjacent to all ally pawns (which are on ring 3)
+            // 5. Ring 2 Archer (Deterministic)
             const ring2Hexes = getHexesInRing(2);
-            let lancePosition = null;
-            let maxAdjacentPawns = 0;
+            ring2Hexes.sort((a, b) => {
+                let distA = 0, distB = 0;
+                pawnPositions.slice(0, 3).forEach(p => {
+                    distA += hexDistance(a.q, a.r, p.q, p.r);
+                    distB += hexDistance(b.q, b.r, p.q, p.r);
+                });
+                return distA - distB;
+            });
 
-            // Find a hex on ring 2 that is adjacent to as many pawns as possible
-            // Ideally adjacent to all 3 pawns
-            for (const hex of ring2Hexes) {
-                if (getPieceAt(hex.q, hex.r)) continue; // Skip if occupied
-
-                // Count how many pawns this hex is adjacent to
-                let adjacentPawnCount = 0;
-                for (const pawn of pawnPositionsList) {
-                    if (hexDistance(hex.q, hex.r, pawn.q, pawn.r) === 1) {
-                        adjacentPawnCount++;
-                    }
-                }
-
-                // Prefer positions adjacent to more pawns
-                if (adjacentPawnCount > maxAdjacentPawns) {
-                    maxAdjacentPawns = adjacentPawnCount;
-                    lancePosition = hex;
-                }
-            }
-
-            // If we found a position adjacent to at least one pawn, use it
-            // Otherwise, find any ring 2 hex that's adjacent to at least one pawn
-            if (!lancePosition || maxAdjacentPawns === 0) {
-                for (const hex of ring2Hexes) {
-                    if (getPieceAt(hex.q, hex.r)) continue;
-
-                    // Check if adjacent to any pawn
-                    for (const pawn of pawnPositionsList) {
-                        if (hexDistance(hex.q, hex.r, pawn.q, pawn.r) === 1) {
-                            lancePosition = hex;
-                            break;
-                        }
-                    }
-                    if (lancePosition) break;
-                }
-            }
-
-            // Final fallback: just pick first available ring 2 hex
-            if (!lancePosition && ring2Hexes.length > 0) {
-                for (const hex of ring2Hexes) {
-                    if (!getPieceAt(hex.q, hex.r)) {
-                        lancePosition = hex;
-                        break;
-                    }
-                }
-            }
-
-            if (lancePosition) {
-                createPiece('ARCHER', player, lancePosition.q, lancePosition.r);
-            }
-
-            // Verify all pieces were created
-            const pieces = gameState.pieces.filter(p => p.player === player);
-            const pieceCounts = {
-                KING: pieces.filter(p => p.type === 'KING').length,
-                PAWN: pieces.filter(p => p.type === 'PAWN').length,
-                KNIGHT: pieces.filter(p => p.type === 'KNIGHT').length,
-                ROOK: pieces.filter(p => p.type === 'ROOK').length,
-                BISHOP: pieces.filter(p => p.type === 'BISHOP').length,
-                ARCHER: pieces.filter(p => p.type === 'ARCHER').length
-            };
-
-            // Ensure we have all required pieces, create missing ones if needed
-            if (pieceCounts.KING === 0) {
-                createPiece('KING', player, kingCorner.q, kingCorner.r);
-            }
-            if (pieceCounts.ROOK === 0 && ring4Positions.length > 0) {
-                createPiece('ROOK', player, ring4Positions[0].q, ring4Positions[0].r);
-            }
-            if (pieceCounts.KNIGHT === 0 && ring4Positions.length > 1) {
-                createPiece('KNIGHT', player, ring4Positions[1].q, ring4Positions[1].r);
-            }
-            if (pieceCounts.BISHOP === 0 && ring4Positions.length > 2) {
-                createPiece('BISHOP', player, ring4Positions[2].q, ring4Positions[2].r);
-            }
-            if (pieceCounts.PAWN < 3) {
-                const allRing3 = getHexesInRing(3);
-                for (const hex of allRing3) {
-                    if (!getPieceAt(hex.q, hex.r) && pieceCounts.PAWN < 3) {
-                        createPiece('PAWN', player, hex.q, hex.r);
-                        pieceCounts.PAWN++;
-                    }
-                }
-            }
-            if (pieceCounts.ARCHER === 0) {
-                const allRing2 = getHexesInRing(2);
-                for (const hex of allRing2) {
-                    if (!getPieceAt(hex.q, hex.r)) {
-                        createPiece('ARCHER', player, hex.q, hex.r);
-                        break;
-                    }
-                }
+            if (ring2Hexes.length > 0) {
+                createPiece('ARCHER', player, ring2Hexes[0].q, ring2Hexes[0].r);
             }
         }
-
 
         function createPiece(type, player, q, r) {
             const config = gameState.unitConfigs[type];
@@ -2717,6 +2591,9 @@
             // Update pins after move
             updatePins();
 
+            // Process any queued bomb detonations now that the piece has moved
+            processPendingBombDetonations();
+
             // Check army elimination
             checkArmyElimination();
 
@@ -3485,16 +3362,7 @@
                 });
             }
 
-            // Rotate each force field
-            if (gameState.forceFields) {
-                gameState.forceFields.forEach(field => {
-                    if (getRing(field.q, field.r) === ring) {
-                        const rotated = rotateHexAroundCenter(field.q, field.r, clockwise ? 1 : -1);
-                        field.q = rotated.q;
-                        field.r = rotated.r;
-                    }
-                });
-            }
+
 
             // Rotate each ghost
             if (gameState.ghosts) {
@@ -3569,6 +3437,7 @@
             if (gameState.timerInterval) cancelAnimationFrame(gameState.timerInterval);
             // Clear bombs on game end
             gameState.bombs = [];
+            gameState.pendingBombDetonations = [];
             renderPieces();
 
             document.getElementById('victory-title').textContent = `Player ${winner} Wins!`;
@@ -3735,6 +3604,7 @@
                 gameState.bombs = JSON.parse(JSON.stringify(gameState.turnSnapshot.bombs));
             } else {
                 gameState.bombs = [];
+                gameState.pendingBombDetonations = [];
             }
             if (gameState.turnSnapshot.ghosts) {
                 gameState.ghosts = JSON.parse(JSON.stringify(gameState.turnSnapshot.ghosts));
@@ -4512,18 +4382,31 @@
 
         function detonateBombsOnUnit(unitIndex) {
             if (!gameState.bombs) return;
-            // Identify bombs attached to this unit
+            // Identify bombs attached to this unit and queue them for deferred detonation
             const bombsToTrigger = gameState.bombs.filter(b => b.type === 'unit' && b.targetUnitIndex === unitIndex);
-            // Trigger each one
-            bombsToTrigger.forEach(b => detonateBomb(b));
+            bombsToTrigger.forEach(b => {
+                if (!gameState.pendingBombDetonations.includes(b)) {
+                    gameState.pendingBombDetonations.push(b);
+                }
+            });
         }
 
         function detonateBombsOwnedBy(unitIndex) {
             if (!gameState.bombs) return;
-            // Identify bombs owned by this unit
+            // Identify bombs owned by this unit and queue them for deferred detonation
             const bombsToTrigger = gameState.bombs.filter(b => b.owner === unitIndex);
-            // Trigger each one
-            bombsToTrigger.forEach(b => detonateBomb(b));
+            bombsToTrigger.forEach(b => {
+                if (!gameState.pendingBombDetonations.includes(b)) {
+                    gameState.pendingBombDetonations.push(b);
+                }
+            });
+        }
+
+        function processPendingBombDetonations() {
+            // Detonate all queued bombs after the move is complete
+            const bombsToDetonate = [...gameState.pendingBombDetonations];
+            gameState.pendingBombDetonations = [];
+            bombsToDetonate.forEach(b => detonateBomb(b));
         }
 
 
@@ -4981,6 +4864,7 @@
             if (gameState.timerInterval) cancelAnimationFrame(gameState.timerInterval);
 
             gameState.bombs = []; // Clear bombs
+            gameState.pendingBombDetonations = [];
 
             // Just show mode selection
             document.getElementById('victory-modal').classList.remove('active');
