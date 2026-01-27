@@ -113,6 +113,13 @@
             letter-spacing: 1px;
         }
 
+        .timer-toggle {
+            margin-top: 6px;
+            padding: 6px 10px;
+            font-size: 12px;
+            min-width: 80px;
+        }
+
         .turn-indicator .player-name {
             font-size: 22px;
             font-weight: 600;
@@ -882,6 +889,7 @@
             <div class="turn-indicator player1" id="turn-indicator">
                 <div class="player-name">Player 1</div>
                 <div class="timer-display" id="active-timer">05:00</div>
+                <button class="btn timer-toggle" id="btn-timer-toggle">Pause</button>
                 <div class="actions-remaining">Actions: <span id="actions-count">2</span>/2</div>
             </div>
 
@@ -985,9 +993,16 @@
                         <input type="checkbox" id="timer-enabled" checked> Enable Timer
                     </label>
                     <div id="timer-config">
-                        <label style="color: var(--text-muted); font-size: 14px;">Minutes per Player:</label>
-                        <input type="number" id="timer-minutes" value="5" min="1" max="60"
-                            style="width: 60px; padding: 4px; background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px;">
+                        <div style="margin-bottom: 8px;">
+                            <label style="color: var(--text-muted); font-size: 14px;">Seconds per Round:</label>
+                            <input type="number" id="timer-round-seconds" value="60" min="5" max="300"
+                                style="width: 70px; padding: 4px; background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px;">
+                        </div>
+                        <div>
+                            <label style="color: var(--text-muted); font-size: 14px;">Reserve Minutes per Game:</label>
+                            <input type="number" id="timer-reserve-minutes" value="15" min="1" max="60"
+                                style="width: 70px; padding: 4px; background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px;">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1066,10 +1081,10 @@
 
             // Timer State
             timerEnabled: false,
-            timeLimit: 0, // ms
-            timeRemaining: { 1: 0, 2: 0 },
-            lastTimestamp: 0,
-            timeRemaining: { 1: 0, 2: 0 },
+            timerPaused: false,
+            roundTimeLimit: 0, // ms per round
+            roundTimeRemaining: { 1: 0, 2: 0 },
+            reserveTimeRemaining: { 1: 0, 2: 0 }, // ms per game
             lastTimestamp: 0,
             timerInterval: null,
 
@@ -3514,6 +3529,10 @@
 
             gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
             gameState.lastTimestamp = performance.now();
+            gameState.timerPaused = false;
+            if (gameState.timerEnabled && gameState.roundTimeLimit > 0) {
+                gameState.roundTimeRemaining[gameState.currentPlayer] = gameState.roundTimeLimit;
+            }
 
             // Expire Force Fields: Remove fields belonging to the player who is about to start their turn
             // (Meaning they lasted through the enemy's turn)
@@ -3533,6 +3552,7 @@
             saveTurnSnapshot();
 
             updateUI();
+            updateTimerUI();
             updateArmyDisplay(); // Update army panel to reflect new pinning status
             clearHighlights();
             renderPieces();
@@ -3586,7 +3606,9 @@
                 hasAnyPieceMoved: gameState.hasAnyPieceMoved,
                 forceFields: JSON.parse(JSON.stringify(gameState.forceFields)),
                 bombs: JSON.parse(JSON.stringify(gameState.bombs)),
-                ghosts: JSON.parse(JSON.stringify(gameState.ghosts))
+                ghosts: JSON.parse(JSON.stringify(gameState.ghosts)),
+                roundTimeRemaining: JSON.parse(JSON.stringify(gameState.roundTimeRemaining)),
+                reserveTimeRemaining: JSON.parse(JSON.stringify(gameState.reserveTimeRemaining))
             };
         }
 
@@ -3596,8 +3618,11 @@
             gameState.pieces = JSON.parse(JSON.stringify(gameState.turnSnapshot.pieces));
             gameState.actionsRemaining = gameState.turnSnapshot.actionsRemaining;
             gameState.hasAnyPieceMoved = gameState.turnSnapshot.hasAnyPieceMoved;
-            if (gameState.turnSnapshot.timeRemaining) {
-                gameState.timeRemaining = JSON.parse(JSON.stringify(gameState.turnSnapshot.timeRemaining));
+            if (gameState.turnSnapshot.roundTimeRemaining) {
+                gameState.roundTimeRemaining = JSON.parse(JSON.stringify(gameState.turnSnapshot.roundTimeRemaining));
+            }
+            if (gameState.turnSnapshot.reserveTimeRemaining) {
+                gameState.reserveTimeRemaining = JSON.parse(JSON.stringify(gameState.turnSnapshot.reserveTimeRemaining));
             }
             // Restore bombs from snapshot (removes bombs placed this turn)
             if (gameState.turnSnapshot.bombs) {
@@ -3634,6 +3659,7 @@
 
             updatePins();
             updateUI();
+            updateTimerUI();
             updateArmyDisplay();
             clearHighlights();
             updateForceFieldVisuals();
@@ -4831,16 +4857,22 @@
 
 
             if (timerEnabled) {
-                const minutes = parseInt(document.getElementById('timer-minutes').value) || 5;
-                const ms = minutes * 60 * 1000;
-                gameState.timeLimit = ms;
-                gameState.timeRemaining = { 1: ms, 2: ms };
+                const roundSeconds = parseInt(document.getElementById('timer-round-seconds').value) || 60;
+                const reserveMinutes = parseInt(document.getElementById('timer-reserve-minutes').value) || 15;
+                const roundMs = roundSeconds * 1000;
+                const reserveMs = reserveMinutes * 60 * 1000;
+
+                gameState.roundTimeLimit = roundMs;
+                gameState.roundTimeRemaining = { 1: roundMs, 2: roundMs };
+                gameState.reserveTimeRemaining = { 1: reserveMs, 2: reserveMs };
+                gameState.timerPaused = false;
                 gameState.lastTimestamp = performance.now();
 
                 // Start Timer Loop
                 if (gameState.timerInterval) cancelAnimationFrame(gameState.timerInterval);
                 requestAnimationFrame(gameLoop);
             }
+            updateTimerUI();
 
             // Hide modals
             document.getElementById('victory-modal').classList.remove('active');
@@ -4851,6 +4883,7 @@
             saveTurnSnapshot();
             updatePins();
             updateUI();
+            updateTimerUI();
             renderPieces();
             updateArmyDisplay();
 
@@ -4865,6 +4898,8 @@
 
             gameState.bombs = []; // Clear bombs
             gameState.pendingBombDetonations = [];
+            gameState.timerEnabled = false;
+            gameState.timerPaused = false;
 
             // Just show mode selection
             document.getElementById('victory-modal').classList.remove('active');
@@ -4873,6 +4908,7 @@
             document.getElementById('game-log').innerHTML = '<div class="log-entry system">Game reset.</div>';
 
             renderPieces(); // Update visual to remove bombs
+            updateTimerUI();
         }
 
 
@@ -4942,14 +4978,33 @@
             const delta = timestamp - gameState.lastTimestamp;
             gameState.lastTimestamp = timestamp;
 
-            // Decrease current player's time
-            gameState.timeRemaining[gameState.currentPlayer] -= delta;
-
-            // Check for timeout
-            if (gameState.timeRemaining[gameState.currentPlayer] <= 0) {
-                gameState.timeRemaining[gameState.currentPlayer] = 0;
+            if (gameState.timerPaused) {
                 updateTimerUI();
-                const winner = gameState.currentPlayer === 1 ? 2 : 1;
+                gameState.timerInterval = requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            const player = gameState.currentPlayer;
+            let roundRemaining = gameState.roundTimeRemaining[player];
+            let reserveRemaining = gameState.reserveTimeRemaining[player];
+
+            let deltaLeft = delta;
+            if (roundRemaining > 0) {
+                const used = Math.min(roundRemaining, deltaLeft);
+                roundRemaining -= used;
+                deltaLeft -= used;
+            }
+            if (deltaLeft > 0) {
+                reserveRemaining -= deltaLeft;
+            }
+
+            gameState.roundTimeRemaining[player] = Math.max(0, roundRemaining);
+            gameState.reserveTimeRemaining[player] = Math.max(0, reserveRemaining);
+
+            // Check for timeout (both round and reserve exhausted)
+            if (gameState.roundTimeRemaining[player] <= 0 && gameState.reserveTimeRemaining[player] <= 0) {
+                updateTimerUI();
+                const winner = player === 1 ? 2 : 1;
                 endGame(winner, 'timeout');
                 return;
             }
@@ -4961,9 +5016,24 @@
         function updateTimerUI() {
             const el = document.getElementById('active-timer');
             if (el) {
-                const ms = Math.max(0, gameState.timeRemaining[gameState.currentPlayer]);
-                el.textContent = formatTime(ms);
+                const player = gameState.currentPlayer;
+                const roundMs = Math.max(0, gameState.roundTimeRemaining[player]);
+                const reserveMs = Math.max(0, gameState.reserveTimeRemaining[player]);
+                el.innerHTML = `<div>R ${formatTime(roundMs)}</div><div>B ${formatTime(reserveMs)}</div>`;
             }
+            updateTimerControls();
+        }
+
+        function updateTimerControls() {
+            const btn = document.getElementById('btn-timer-toggle');
+            if (!btn) return;
+            if (!gameState.timerEnabled) {
+                btn.disabled = true;
+                btn.textContent = 'Pause';
+                return;
+            }
+            btn.disabled = false;
+            btn.textContent = gameState.timerPaused ? 'Resume' : 'Pause';
         }
 
         function formatTime(ms) {
@@ -4995,6 +5065,14 @@
             document.getElementById('btn-new-game').addEventListener('click', resetGame);
             document.getElementById('btn-confirm-path').addEventListener('click', confirmPathMove);
             document.getElementById('btn-cancel-path').addEventListener('click', cancelPathBuilding);
+            document.getElementById('btn-timer-toggle').addEventListener('click', () => {
+                if (!gameState.timerEnabled) return;
+                gameState.timerPaused = !gameState.timerPaused;
+                if (!gameState.timerPaused) {
+                    gameState.lastTimestamp = performance.now();
+                }
+                updateTimerUI();
+            });
             document.getElementById('btn-rotate').addEventListener('click', () => {
                 if (gameState.selectedPiece !== null) {
                     const piece = gameState.pieces[gameState.selectedPiece];
