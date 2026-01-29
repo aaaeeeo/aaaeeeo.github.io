@@ -3618,12 +3618,7 @@
             gameState.pieces = JSON.parse(JSON.stringify(gameState.turnSnapshot.pieces));
             gameState.actionsRemaining = gameState.turnSnapshot.actionsRemaining;
             gameState.hasAnyPieceMoved = gameState.turnSnapshot.hasAnyPieceMoved;
-            if (gameState.turnSnapshot.roundTimeRemaining) {
-                gameState.roundTimeRemaining = JSON.parse(JSON.stringify(gameState.turnSnapshot.roundTimeRemaining));
-            }
-            if (gameState.turnSnapshot.reserveTimeRemaining) {
-                gameState.reserveTimeRemaining = JSON.parse(JSON.stringify(gameState.turnSnapshot.reserveTimeRemaining));
-            }
+            // Do not reset timers on turn reset
             // Restore bombs from snapshot (removes bombs placed this turn)
             if (gameState.turnSnapshot.bombs) {
                 gameState.bombs = JSON.parse(JSON.stringify(gameState.turnSnapshot.bombs));
