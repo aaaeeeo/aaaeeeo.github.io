@@ -3473,7 +3473,7 @@
             const piece = gameState.pieces[pieceIndex];
             const history = getPieceActionHistory(pieceIndex);
 
-            if (piece.type === 'PAWN' || piece.type === 'KING') {
+            if (piece.type === 'PAWN') {
                 return history.size === 0;
             }
 
@@ -3484,7 +3484,7 @@
             const piece = gameState.pieces[pieceIndex];
             const history = getPieceActionHistory(pieceIndex);
 
-            if (piece.type === 'PAWN' || piece.type === 'KING') {
+            if (piece.type === 'PAWN') {
                 return history.size > 0;
             }
 
