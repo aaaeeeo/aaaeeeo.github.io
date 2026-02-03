@@ -2737,6 +2737,35 @@
             return stillPinned;
         }
 
+        // Centralized death handler to ensure all cleanup (including ghosts) happens correctly
+        function handlePieceDeath(piece) {
+            const pieceIndex = gameState.pieces.indexOf(piece);
+            if (pieceIndex < 0 || !piece.alive) return;
+
+            piece.alive = false;
+            detonateBombsOnUnit(pieceIndex);
+            detonateBombsOwnedBy(pieceIndex);
+
+            // If a Ghost dies, remove it from the ghosts tracking array
+            if (piece.type === 'GHOST') {
+                gameState.ghosts = gameState.ghosts.filter(g =>
+                    !(g.q === piece.q && g.r === piece.r && g.owner === piece.summonerIndex)
+                );
+            }
+
+            // If a Knight (Snake) dies, remove its summoned ghost
+            if (piece.type === 'KNIGHT') {
+                const ownedGhost = gameState.pieces.find(p =>
+                    p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
+                );
+                if (ownedGhost) {
+                    ownedGhost.alive = false;
+                    gameState.ghosts = gameState.ghosts.filter(g => g.owner !== pieceIndex);
+                    addLog(`${piece.player === 1 ? 'P1' : 'P2'} Soul Echo fades away...`, piece.player);
+                }
+            }
+        }
+
         function applyDamage(piece, damage, attackerIndex = null) {
             if (gameState.phase === 'ended') return;
 
@@ -2765,9 +2794,7 @@
                     if (attackerIndex !== null) {
                         const stillPinnedWithoutAttacker = isStillPinnedWithoutAttacker(actualPiece, attackerIndex);
                         if (stillPinnedWithoutAttacker) {
-                            actualPiece.alive = false;
-                            detonateBombsOnUnit(pieceIndex);
-                            detonateBombsOwnedBy(pieceIndex);
+                            handlePieceDeath(actualPiece);
                             if (PIECE_TYPES[actualPiece.type].isKing) {
                                 addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
                                 endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
@@ -2777,9 +2804,7 @@
                             return;
                         }
                     } else {
-                        actualPiece.alive = false;
-                        detonateBombsOnUnit(pieceIndex);
-                        detonateBombsOwnedBy(pieceIndex);
+                        handlePieceDeath(actualPiece);
                         if (PIECE_TYPES[actualPiece.type].isKing) {
                             addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed (pinned)!`, 'system');
                             endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
@@ -2795,9 +2820,7 @@
                     if (!actualPiece.pinned) return;
                     actualPiece.hp -= damage;
                     if (actualPiece.hp <= 0) {
-                        actualPiece.alive = false;
-                        detonateBombsOnUnit(pieceIndex);
-                        detonateBombsOwnedBy(pieceIndex);
+                        handlePieceDeath(actualPiece);
                         addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} King destroyed!`, 'system');
                         endGame(actualPiece.player === 1 ? 2 : 1, 'kingkill');
                     }
@@ -2806,26 +2829,7 @@
 
                 actualPiece.hp -= damage;
                 if (actualPiece.hp <= 0) {
-                    actualPiece.alive = false;
-                    detonateBombsOnUnit(pieceIndex);
-                    detonateBombsOwnedBy(pieceIndex);
-
-                    if (actualPiece.type === 'GHOST') {
-                        gameState.ghosts = gameState.ghosts.filter(g =>
-                            !(g.q === actualPiece.q && g.r === actualPiece.r && g.owner === actualPiece.summonerIndex)
-                        );
-                    }
-
-                    if (actualPiece.type === 'KNIGHT') {
-                        const ownedGhost = gameState.pieces.find(p =>
-                            p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
-                        );
-                        if (ownedGhost) {
-                            ownedGhost.alive = false;
-                            gameState.ghosts = gameState.ghosts.filter(g => g.owner !== pieceIndex);
-                            addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} Soul Echo fades away...`, actualPiece.player);
-                        }
-                    }
+                    handlePieceDeath(actualPiece);
                     addLog(`${actualPiece.player === 1 ? 'P1' : 'P2'} ${PIECE_TYPES[actualPiece.type].name} destroyed`, actualPiece.player);
                 }
             });
