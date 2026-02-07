@@ -1062,7 +1062,7 @@
             ROOK: { symbol: '🛡️', name: 'Shield', defaultHP: 6, isKing: false },
             BISHOP: { symbol: '💣', name: 'Bomber', defaultHP: 4, isKing: false },
             ARCHER: { symbol: '☾', name: 'Archer', defaultHP: 4, isKing: false },
-            BRUTE: { symbol: '🥊', name: 'Monk', defaultHP: 2, isKing: false },
+            MONK: { symbol: '🥊', name: 'Monk', defaultHP: 2, isKing: false },
             GHOST: { symbol: '👻', name: 'Soul Echo', defaultHP: 1, isKing: false, isGhost: true },
         };
 
@@ -1254,7 +1254,7 @@
                 ramDamage: 2
             };
             // Monk: straight line
-            gameState.unitConfigs['BRUTE'] = {
+            gameState.unitConfigs['MONK'] = {
                 range: 5,
                 template: MOVEMENT_TEMPLATES.STRAIGHT_LINE,
                 hp: 3,
@@ -1844,7 +1844,7 @@
                     iconGroup.appendChild(shine);
                     iconGroup.setAttribute('pointer-events', 'none');
                     g.appendChild(iconGroup);
-                } else if (piece.type === 'BRUTE') {
+                } else if (piece.type === 'MONK') {
                     const monkIcon = createMonkIconSvg(24, 'white');
                     monkIcon.setAttribute('x', x - 12);
                     monkIcon.setAttribute('y', y - 12);
@@ -3815,7 +3815,7 @@
         function resetTurn() {
             if (gameState.phase === 'placement') {
                 const player = gameState.currentPlayer;
-                const replacableTypes = ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'];
+                const replacableTypes = ['KNIGHT', 'ROOK', 'BISHOP', 'MONK'];
 
                 // Remove current player's placed pieces from the board
                 gameState.pieces = gameState.pieces.filter(piece => {
@@ -3824,7 +3824,7 @@
 
                 // Reset placement state for current player only
                 gameState.placementSelectedType = null;
-                gameState.placementRemaining[player] = ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'];
+                gameState.placementRemaining[player] = ['KNIGHT', 'ROOK', 'BISHOP', 'MONK'];
                 gameState.placementPlacedCount[player] = 0;
 
                 updatePins();
@@ -3907,7 +3907,7 @@
             }
 
             const occupant = getPieceAt(q, r);
-            const replacableTypes = ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'];
+            const replacableTypes = ['KNIGHT', 'ROOK', 'BISHOP', 'MONK'];
 
             if (!selectedType) {
                 if (!occupant) {
@@ -4389,7 +4389,7 @@
                 } else if (piece.type === 'BISHOP') {
                     const hasBomb = gameState.bombs && gameState.bombs.some(b => b.owner === pieceIndex);
                     rotateBtn.innerHTML = hasBomb ? '⚡ Remove Bomb' : '⚡ Sticky Bomb';
-                } else if (piece.type === 'BRUTE') {
+                } else if (piece.type === 'MONK') {
                     rotateBtn.innerHTML = '⚡ Slide';
                 } else if (piece.type === 'KNIGHT') {
                     const existingGhost = gameState.pieces.find(p =>
@@ -5037,7 +5037,7 @@
 
             const player = gameState.currentPlayer;
             const remaining = gameState.placementRemaining[player] || [];
-            const allTypes = ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'];
+            const allTypes = ['KNIGHT', 'ROOK', 'BISHOP', 'MONK'];
 
             allTypes.forEach(type => {
                 const div = document.createElement('div');
@@ -5070,7 +5070,7 @@
                     div.style.display = 'flex';
                     div.style.alignItems = 'center';
                     div.style.justifyContent = 'center';
-                } else if (type === 'BRUTE') {
+                } else if (type === 'MONK') {
                     div.innerHTML = '';
                     div.appendChild(createMonkIconSvg(26, 'white'));
                     div.style.display = 'flex';
@@ -5191,7 +5191,7 @@
                         div.style.display = 'flex';
                         div.style.alignItems = 'center';
                         div.style.justifyContent = 'center';
-                    } else if (piece.type === 'BRUTE') {
+                    } else if (piece.type === 'MONK') {
                         const svgSize = 24;
                         const strokeColor = piece.pinned ? '#5a5a5a' : 'white';
                         div.innerHTML = '';
@@ -5270,7 +5270,7 @@
                     btn.style.display = 'flex';
                     btn.style.alignItems = 'center';
                     btn.style.justifyContent = 'center';
-                } else if (type === 'BRUTE') {
+                } else if (type === 'MONK') {
                     btn.innerHTML = '';
                     btn.appendChild(createMonkIconSvg(24, 'currentColor'));
                     btn.style.display = 'flex';
@@ -5445,7 +5445,7 @@
             gameState.turnHistory = new Map(); // pieceIndex -> Set<ActionType>
             gameState.placementSelectedType = null;
             gameState.placementSlots = { 1: [], 2: [] };
-            gameState.placementRemaining = { 1: ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'], 2: ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'] };
+            gameState.placementRemaining = { 1: ['KNIGHT', 'ROOK', 'BISHOP', 'MONK'], 2: ['KNIGHT', 'ROOK', 'BISHOP', 'MONK'] };
             gameState.placementPlacedCount = { 1: 0, 2: 0 };
 
             // Setup Timer
@@ -5707,7 +5707,7 @@
                         }
                     } else if (piece.type === 'ROOK') {
                         activateForceField(gameState.selectedPiece);
-                    } else if (piece.type === 'BRUTE') {
+                    } else if (piece.type === 'MONK') {
                         if (gameState.monkSlideMode) {
                             exitMonkSlideMode();
                         } else {
