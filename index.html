@@ -893,6 +893,14 @@
                 <div class="actions-remaining">Actions: <span id="actions-count">2</span>/2</div>
             </div>
 
+            <div class="placement-palette" id="placement-panel" style="display: none; margin-top: 12px;">
+                <div style="font-weight: 600; margin-bottom: 8px;">Placement Phase</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+                    Place any 3 of 4 (Snake, Shield, Bomber, Brute) on the orange ring.
+                </div>
+                <div class="placement-pieces" id="placement-pieces"></div>
+            </div>
+
 
 
 
@@ -1039,8 +1047,60 @@
             ROOK: { symbol: '🛡️', name: 'Shield', defaultHP: 6, isKing: false },
             BISHOP: { symbol: '💣', name: 'Bomber', defaultHP: 4, isKing: false },
             ARCHER: { symbol: '☾', name: 'Archer', defaultHP: 4, isKing: false },
+            BRUTE: { symbol: '💪', name: 'Brute', defaultHP: 2, isKing: false },
             GHOST: { symbol: '👻', name: 'Soul Echo', defaultHP: 1, isKing: false, isGhost: true },
         };
+        const BRUTE_ICON_SRC = 'file:///Users/lialx/.cursor/projects/Users-lialx-throne/assets/biceps_010-48892aae-ec9e-4ca4-bf62-d63acf278cbf.png';
+        const BRUTE_ICON_SIZE = 350;
+
+        function createBruteIconSvg(size, color) {
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', size);
+            svg.setAttribute('height', size);
+            svg.setAttribute('viewBox', `0 0 ${BRUTE_ICON_SIZE} ${BRUTE_ICON_SIZE}`);
+
+            const uid = Math.random().toString(36).slice(2);
+            const filterId = `brute-invert-${uid}`;
+            const maskId = `brute-mask-${uid}`;
+
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
+            filter.setAttribute('id', filterId);
+            const matrix = document.createElementNS('http://www.w3.org/2000/svg', 'feColorMatrix');
+            matrix.setAttribute('type', 'matrix');
+            matrix.setAttribute('values', '-1 0 0 0 1 0 -1 0 0 1 0 0 -1 0 1 0 0 0 1 0');
+            filter.appendChild(matrix);
+            defs.appendChild(filter);
+
+            const mask = document.createElementNS('http://www.w3.org/2000/svg', 'mask');
+            mask.setAttribute('id', maskId);
+            mask.setAttribute('maskUnits', 'userSpaceOnUse');
+            mask.setAttribute('x', '0');
+            mask.setAttribute('y', '0');
+            mask.setAttribute('width', String(BRUTE_ICON_SIZE));
+            mask.setAttribute('height', String(BRUTE_ICON_SIZE));
+            const maskImage = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+            maskImage.setAttribute('href', BRUTE_ICON_SRC);
+            maskImage.setAttribute('x', '0');
+            maskImage.setAttribute('y', '0');
+            maskImage.setAttribute('width', String(BRUTE_ICON_SIZE));
+            maskImage.setAttribute('height', String(BRUTE_ICON_SIZE));
+            maskImage.setAttribute('filter', `url(#${filterId})`);
+            mask.appendChild(maskImage);
+            defs.appendChild(mask);
+            svg.appendChild(defs);
+
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.setAttribute('x', '0');
+            rect.setAttribute('y', '0');
+            rect.setAttribute('width', String(BRUTE_ICON_SIZE));
+            rect.setAttribute('height', String(BRUTE_ICON_SIZE));
+            rect.setAttribute('fill', color);
+            rect.setAttribute('mask', `url(#${maskId})`);
+            svg.appendChild(rect);
+
+            return svg;
+        }
 
         // Game state
         let gameState = {
@@ -1065,6 +1125,12 @@
             pathBuilding: false,
             currentPath: [],
             pathStartPiece: null,
+            placementSelectedType: null,
+            placementSlots: { 1: [], 2: [] },
+            placementRemaining: { 1: [], 2: [] },
+            placementPlacedCount: { 1: 0, 2: 0 },
+            bruteSlideMode: false,
+            bruteSlideSource: null,
             params: {
                 actionsPerTurn: 2
             },
@@ -1102,7 +1168,8 @@
         // Movement templates
         const MOVEMENT_TEMPLATES = {
             FREE_MOTION: 'free_motion',
-            STRAIGHT_LINE: 'straight_line'
+            STRAIGHT_LINE: 'straight_line',
+            DIRECT_JUMP: 'direct_jump'
         };
 
         // Initialize unit configs with default movement patterns
@@ -1147,6 +1214,13 @@
                 range: 1,
                 template: MOVEMENT_TEMPLATES.FREE_MOTION,
                 hp: 4,
+                ramDamage: 2
+            };
+            // Brute: same as pawn for now
+            gameState.unitConfigs['BRUTE'] = {
+                range: 3,
+                template: MOVEMENT_TEMPLATES.DIRECT_JUMP,
+                hp: 3,
                 ramDamage: 2
             };
             // Ghost: cannot move, just a static piece
@@ -1276,7 +1350,7 @@
         // FIXED STARTING POSITIONS
         // ============================================
 
-        function setupFixedPositions() {
+        function setupFixedPositions(isPlacementPhase = false) {
             gameState.pieces = [];
 
             // Pick a random corner for player 1 (6 possible corners on ring 5)
@@ -1294,16 +1368,16 @@
             const p2Corner = rotateHexAroundCenter(p1Corner.q, p1Corner.r, 3);
 
             // Place Player 1 pieces
-            placeArmy(1, p1Corner);
+            placeArmy(1, p1Corner, isPlacementPhase);
 
             // Place Player 2 pieces
-            placeArmy(2, p2Corner);
+            placeArmy(2, p2Corner, isPlacementPhase);
 
             // Update pins after placement
             updatePins();
         }
 
-        function placeArmy(player, kingCorner) {
+        function placeArmy(player, kingCorner, isPlacementPhase = false) {
             // 1. King at ring 5 corner
             createPiece('KING', player, kingCorner.q, kingCorner.r);
 
@@ -1330,13 +1404,18 @@
                 return crossA - crossB;
             });
 
-            if (r4Candidates.length >= 3) {
-                createPiece('KNIGHT', player, r4Candidates[0].q, r4Candidates[0].r);
-                createPiece('ROOK', player, r4Candidates[1].q, r4Candidates[1].r);
-                createPiece('BISHOP', player, r4Candidates[2].q, r4Candidates[2].r);
-            } else if (r4Candidates.length > 0) {
-                createPiece('ROOK', player, r4Candidates[0].q, r4Candidates[0].r);
-                if (r4Candidates[1]) createPiece('KNIGHT', player, r4Candidates[1].q, r4Candidates[1].r);
+            if (isPlacementPhase) {
+                // Store placement slots for Knight/Rook/Bishop on ring 4
+                gameState.placementSlots[player] = r4Candidates.slice(0, 3);
+            } else {
+                if (r4Candidates.length >= 3) {
+                    createPiece('KNIGHT', player, r4Candidates[0].q, r4Candidates[0].r);
+                    createPiece('ROOK', player, r4Candidates[1].q, r4Candidates[1].r);
+                    createPiece('BISHOP', player, r4Candidates[2].q, r4Candidates[2].r);
+                } else if (r4Candidates.length > 0) {
+                    createPiece('ROOK', player, r4Candidates[0].q, r4Candidates[0].r);
+                    if (r4Candidates[1]) createPiece('KNIGHT', player, r4Candidates[1].q, r4Candidates[1].r);
+                }
             }
 
 
@@ -1728,6 +1807,12 @@
                     iconGroup.appendChild(shine);
                     iconGroup.setAttribute('pointer-events', 'none');
                     g.appendChild(iconGroup);
+                } else if (piece.type === 'BRUTE') {
+                    const bruteIcon = createBruteIconSvg(24, 'white');
+                    bruteIcon.setAttribute('x', x - 12);
+                    bruteIcon.setAttribute('y', y - 12);
+                    bruteIcon.setAttribute('pointer-events', 'none');
+                    g.appendChild(bruteIcon);
                 } else if (piece.type === 'GHOST') {
                     // Ghost piece - use spectral ghost icon
                     const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -1814,7 +1899,12 @@
                     rngText.setAttribute('y', y + HEX_SIZE * 0.5); // Bottom-right
                     rngText.classList.add('piece-stat', 'rng');
 
-                    const moveIcon = config.template === MOVEMENT_TEMPLATES.STRAIGHT_LINE ? '↑' : '↝';
+                    let moveIcon = '↝';
+                    if (config.template === MOVEMENT_TEMPLATES.STRAIGHT_LINE) {
+                        moveIcon = '↑';
+                    } else if (config.template === MOVEMENT_TEMPLATES.DIRECT_JUMP) {
+                        moveIcon = '◎';
+                    }
                     rngText.textContent = `${moveIcon}${config.range}`;
                     g.appendChild(rngText);
                 }
@@ -2057,6 +2147,39 @@
 
             const config = gameState.unitConfigs[piece.type];
             const maxRange = config.range;
+            if (config.template === MOVEMENT_TEMPLATES.DIRECT_JUMP) {
+                const moves = [];
+                const pieceIndex = gameState.pieces.findIndex(p => p.alive && p.q === piece.q && p.r === piece.r);
+                for (let q = -BOARD_RADIUS; q <= BOARD_RADIUS; q++) {
+                    for (let r = -BOARD_RADIUS; r <= BOARD_RADIUS; r++) {
+                        if (!isValidHex(q, r)) continue;
+                        if (q === piece.q && r === piece.r) continue;
+                        if (hexDistance(piece.q, piece.r, q, r) > maxRange) continue;
+
+                        const occupant = getPieceAt(q, r);
+                        if (occupant && occupant.player === piece.player) continue;
+
+                        const hasEnemy = !!occupant && occupant.player !== piece.player;
+                        const move = {
+                            q,
+                            r,
+                            damagePath: hasEnemy ? [{ q, r, piece: occupant }] : [],
+                            willKill: hasEnemy,
+                            path: [{ q, r }]
+                        };
+
+                        if (hasEnemy) {
+                            const ramDamage = gameState.unitConfigs[piece.type].ramDamage;
+                            if (!simulateMoveAndValidate(pieceIndex, q, r, move, ramDamage)) {
+                                continue;
+                            }
+                        }
+
+                        moves.push(move);
+                    }
+                }
+                return moves;
+            }
             // For templates, all directions are valid for path finding
             // Template restrictions are enforced during path building
             const validDirections = [0, 1, 2, 3, 4, 5];
@@ -2260,6 +2383,41 @@
             // Get valid adjacent hexes for the next step in path building
             const config = gameState.unitConfigs[piece.type];
             const maxRange = config.range;
+
+            // Direct jump: choose destination within range (no path)
+            if (config.template === MOVEMENT_TEMPLATES.DIRECT_JUMP) {
+                if (currentPath.length > 0) return [];
+                const results = [];
+                const pieceIndex = gameState.pieces.findIndex(p => p.alive && p.q === piece.q && p.r === piece.r);
+                for (let q = -BOARD_RADIUS; q <= BOARD_RADIUS; q++) {
+                    for (let r = -BOARD_RADIUS; r <= BOARD_RADIUS; r++) {
+                        if (!isValidHex(q, r)) continue;
+                        if (q === piece.q && r === piece.r) continue;
+                        if (hexDistance(piece.q, piece.r, q, r) > maxRange) continue;
+
+                        const occupant = getPieceAt(q, r);
+                        if (occupant && occupant.player === piece.player) continue;
+
+                        const hasEnemy = !!occupant && occupant.player !== piece.player;
+                        if (hasEnemy) {
+                            const move = {
+                                q,
+                                r,
+                                damagePath: [{ q, r, piece: occupant }],
+                                willKill: true,
+                                path: [{ q, r }]
+                            };
+                            const ramDamage = gameState.unitConfigs[piece.type].ramDamage;
+                            if (!simulateMoveAndValidate(pieceIndex, q, r, move, ramDamage)) {
+                                continue;
+                            }
+                        }
+
+                        results.push({ q, r, hasEnemy });
+                    }
+                }
+                return results;
+            }
 
             // If path is at max range, no more steps
             if (currentPath.length >= maxRange) return [];
@@ -3647,6 +3805,7 @@
             if (gameState.rotationMode) exitRotationMode();
             if (gameState.lanceTargetingMode) exitLanceTargetingMode();
             if (gameState.bombTargetingMode) exitBombTargetingMode();
+            if (gameState.bruteSlideMode) exitBruteSlideMode();
 
             gameState.forceFields = []; // Reset force fields on turn reset (simple approach) or restore from snapshot if we added it?
             // Snapshot doesn't have forceFields yet. We should add it to snapshot.
@@ -3671,7 +3830,196 @@
         // INPUT HANDLING
         // ============================================
 
+        function handlePlacementClick(q, r) {
+            const player = gameState.currentPlayer;
+            const selectedType = gameState.placementSelectedType;
+            const slots = gameState.placementSlots[player] || [];
+
+            if (!selectedType) {
+                addLog('Select a piece to place.', 'system');
+                return;
+            }
+
+            if (!slots.some(s => s.q === q && s.r === r)) {
+                addLog('Must place on the orange ring slots.', 'system');
+                return;
+            }
+
+            if (getPieceAt(q, r)) {
+                addLog('That hex is already occupied.', 'system');
+                return;
+            }
+
+            createPiece(selectedType, player, q, r);
+            gameState.placementRemaining[player] = (gameState.placementRemaining[player] || []).filter(t => t !== selectedType);
+            gameState.placementPlacedCount[player] = (gameState.placementPlacedCount[player] || 0) + 1;
+            gameState.placementSelectedType = null;
+
+            updatePins();
+            renderPieces();
+            updateArmyDisplay();
+            updatePlacementUI();
+
+            // Advance placement to next player or start battle
+            const otherPlayer = player === 1 ? 2 : 1;
+            if (gameState.placementPlacedCount[player] >= 3) {
+                if ((gameState.placementPlacedCount[otherPlayer] || 0) >= 3) {
+                    startBattleFromPlacement();
+                } else {
+                    gameState.currentPlayer = otherPlayer;
+                    updateUI();
+                    updatePlacementUI();
+                    addLog(`Player ${gameState.currentPlayer} Placement`, 'system');
+                }
+            }
+        }
+
+        function startBattleFromPlacement() {
+            gameState.phase = 'playing';
+            gameState.currentPlayer = 1;
+            gameState.isFirstTurn = true;
+            gameState.actionsRemaining = 1;
+            gameState.usedPieces.clear();
+            gameState.selectedPiece = null;
+            gameState.validMoves = [];
+            gameState.placementSelectedType = null;
+
+            if (gameState.timerEnabled) {
+                gameState.timerPaused = false;
+                gameState.lastTimestamp = performance.now();
+                if (gameState.timerInterval) cancelAnimationFrame(gameState.timerInterval);
+                requestAnimationFrame(gameLoop);
+            }
+
+            updatePins();
+            saveTurnSnapshot();
+            updateUI();
+            updateTimerUI();
+            renderPieces();
+            updateArmyDisplay();
+            addLog('=== BATTLE STARTED ===', 'system');
+            addLog(`Player 1's Turn (1 action)`, 'system');
+        }
+
+        function activateBruteSlide(pieceIndex) {
+            const piece = gameState.pieces[pieceIndex];
+            if (piece.pinned) {
+                addLog('Pinned pieces cannot move or take actions!', 'system');
+                return;
+            }
+            if (!canPiecePerformAction(pieceIndex, 'ALT')) {
+                addLog('Alt action already used this turn.', 'system');
+                return;
+            }
+            gameState.bruteSlideMode = true;
+            gameState.bruteSlideSource = pieceIndex;
+            gameState.selectedPiece = pieceIndex;
+            addLog('Select an adjacent unit to slide.', 'system');
+
+            clearHighlights();
+            for (let dir = 0; dir < 6; dir++) {
+                const n = hexNeighbor(piece.q, piece.r, dir);
+                if (!isValidHex(n.q, n.r)) continue;
+                const target = getPieceAt(n.q, n.r);
+                if (target) {
+                    const hex = document.querySelector(`.hex[data-q="${n.q}"][data-r="${n.r}"]`);
+                    if (hex) hex.classList.add('valid-move');
+                }
+            }
+        }
+
+        function exitBruteSlideMode() {
+            gameState.bruteSlideMode = false;
+            gameState.bruteSlideSource = null;
+            clearHighlights();
+            renderPieces();
+        }
+
+        function executeBruteSlide(bruteIndex, targetIndex) {
+            const brute = gameState.pieces[bruteIndex];
+            const target = gameState.pieces[targetIndex];
+            if (!brute || !target) return;
+            if (target.player !== brute.player) {
+                addLog('Brute can only slide allies.', 'system');
+                exitBruteSlideMode();
+                return;
+            }
+
+            // Determine direction from brute to target
+            let direction = -1;
+            for (let dir = 0; dir < 6; dir++) {
+                const n = hexNeighbor(brute.q, brute.r, dir);
+                if (n.q === target.q && n.r === target.r) {
+                    direction = dir;
+                    break;
+                }
+            }
+            if (direction < 0) {
+                addLog('Slide target must be adjacent.', 'system');
+                exitBruteSlideMode();
+                return;
+            }
+
+            // Slide target in the same direction away from brute
+            let current = { q: target.q, r: target.r };
+            let next = hexNeighbor(current.q, current.r, direction);
+            let moved = false;
+            let insideForceField = isInsideForceField(current.q, current.r);
+
+            while (isValidHex(next.q, next.r) && !getPieceAt(next.q, next.r)) {
+                const nextInside = isInsideForceField(next.q, next.r);
+                // Stop at force field boundary from either side
+                if (nextInside !== insideForceField) break;
+                current = { q: next.q, r: next.r };
+                insideForceField = nextInside;
+                next = hexNeighbor(current.q, current.r, direction);
+                moved = true;
+            }
+
+            if (!moved) {
+                addLog('No space to slide.', 'system');
+                exitBruteSlideMode();
+                return;
+            }
+
+            target.q = current.q;
+            target.r = current.r;
+            addLog(`${PIECE_TYPES[brute.type].name} slides ${PIECE_TYPES[target.type].name} to (${current.q}, ${current.r})`, brute.player);
+
+            if (target.type === 'GHOST') {
+                const ghostEntry = gameState.ghosts.find(g => g.owner === target.summonerIndex);
+                if (ghostEntry) {
+                    ghostEntry.q = target.q;
+                    ghostEntry.r = target.r;
+                }
+            }
+
+            // Check for Archer Ascension (reaching outer ring)
+            if (target.type === 'ARCHER' && !target.altMoveUnlocked) {
+                if (getRing(target.q, target.r) === BOARD_RADIUS) {
+                    target.altMoveUnlocked = true;
+                    addLog('ARCHER reached the edge! Shoot Arrow Unlocked.', 'system');
+                }
+            }
+
+            // Check victory (King reaching throne)
+            if (target.q === 0 && target.r === 0 && PIECE_TYPES[target.type].isKing) {
+                endGame(target.player, 'throne');
+                return;
+            }
+
+            useAction(bruteIndex, 'ALT');
+            exitBruteSlideMode();
+            updatePins();
+            renderPieces();
+            updateArmyDisplay();
+        }
+
         function onHexClick(q, r, e) {
+            if (gameState.phase === 'placement') {
+                handlePlacementClick(q, r);
+                return;
+            }
             if (gameState.phase !== 'playing') return;
 
             if (gameState.rotationMode) {
@@ -3732,6 +4080,12 @@
                 return;
             }
 
+            // Brute Slide targeting mode (must select adjacent unit)
+            if (gameState.bruteSlideMode) {
+                addLog('Select an adjacent unit to slide.', 'system');
+                return;
+            }
+
             // Path building mode
             if (gameState.pathBuilding && gameState.pathStartPiece !== null) {
                 const piece = gameState.pieces[gameState.pathStartPiece];
@@ -3781,6 +4135,20 @@
             // In lance targeting mode, clicking on a piece might be a valid target selection
             if (gameState.lanceTargetingMode) {
                 handleLanceTargetingClick(piece.q, piece.r);
+                return;
+            }
+
+            // Brute slide targeting mode
+            if (gameState.bruteSlideMode && gameState.bruteSlideSource !== null) {
+                const bruteIndex = gameState.bruteSlideSource;
+                if (index === bruteIndex) return;
+                const brute = gameState.pieces[bruteIndex];
+                if (hexDistance(brute.q, brute.r, piece.q, piece.r) !== 1) {
+                    addLog('Slide target must be adjacent.', 'system');
+                    exitBruteSlideMode();
+                    return;
+                }
+                executeBruteSlide(bruteIndex, index);
                 return;
             }
 
@@ -3907,6 +4275,8 @@
                 } else if (piece.type === 'BISHOP') {
                     const hasBomb = gameState.bombs && gameState.bombs.some(b => b.owner === pieceIndex);
                     rotateBtn.innerHTML = hasBomb ? '⚡ Remove Bomb' : '⚡ Sticky Bomb';
+                } else if (piece.type === 'BRUTE') {
+                    rotateBtn.innerHTML = '⚡ Slide';
                 } else if (piece.type === 'KNIGHT') {
                     const existingGhost = gameState.pieces.find(p =>
                         p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
@@ -3957,6 +4327,9 @@
             }
             if (gameState.bombTargetingMode) {
                 gameState.bombTargetingMode = false;
+            }
+            if (gameState.bruteSlideMode) {
+                exitBruteSlideMode();
             }
             if (gameState.ghostTargetingMode) {
                 gameState.ghostTargetingMode = false;
@@ -4345,6 +4718,14 @@
             addLog(`${PIECE_TYPES[target.type].name} swaps positions with Soul Echo!`, knight.player);
             useAction(knightIndex, 'ALT');
 
+            // Check for Archer Ascension (reaching outer ring)
+            if (target.type === 'ARCHER' && !target.altMoveUnlocked) {
+                if (getRing(target.q, target.r) === BOARD_RADIUS) {
+                    target.altMoveUnlocked = true;
+                    addLog('ARCHER reached the edge! Shoot Arrow Unlocked.', 'system');
+                }
+            }
+
             // Update pins after the swap
             updatePins();
             renderPieces();
@@ -4519,6 +4900,97 @@
                 const totalActionsForTurn = gameState.isFirstTurn ? 1 : gameState.params.actionsPerTurn;
                 resetTurnBtn.disabled = !canInteract || gameState.actionsRemaining >= totalActionsForTurn;
             }
+
+            updatePlacementUI();
+        }
+
+        function updatePlacementUI() {
+            const panel = document.getElementById('placement-panel');
+            const piecesContainer = document.getElementById('placement-pieces');
+            if (!panel || !piecesContainer) return;
+
+            if (gameState.phase !== 'placement') {
+                panel.style.display = 'none';
+                return;
+            }
+
+            panel.style.display = 'block';
+            piecesContainer.innerHTML = '';
+
+            const player = gameState.currentPlayer;
+            const remaining = gameState.placementRemaining[player] || [];
+            const allTypes = ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'];
+
+            allTypes.forEach(type => {
+                const div = document.createElement('div');
+                div.className = 'placement-piece';
+                if (type === 'KNIGHT') {
+                    div.innerHTML = `<svg width="26" height="26" viewBox="-10 -13 20 26" style="vertical-align: middle;">
+                        <path d="M 0 9 Q 1 7 4 7 Q 7 7 7 4 Q 7 1 0 1 Q -7 1 -7 -2 Q -7 -5 0 -5" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                        <path d="M 0 -4 L 3.5 -7.5 L 0 -11 L -3.5 -7.5 Z" fill="white"/>
+                        <path d="M 0 -11 L -1.5 -12.5 M 0 -11 L 1.5 -12.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>`;
+                    div.style.display = 'flex';
+                    div.style.alignItems = 'center';
+                    div.style.justifyContent = 'center';
+                } else if (type === 'ROOK') {
+                    div.innerHTML = `<svg width="26" height="26" viewBox="-10 -10 20 20" style="vertical-align: middle; fill: none; stroke: white; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
+                        <path d="M -6 -7 H 6 L 6 -1 Q 6 6 0 9 Q -6 6 -6 -1 Z" stroke-width="2"/>
+                        <path d="M 0 -7 L 0 9" stroke-width="1.5"/>
+                        <path d="M -5.5 -2 L 5.5 -2" stroke-width="1"/>
+                    </svg>`;
+                    div.style.display = 'flex';
+                    div.style.alignItems = 'center';
+                    div.style.justifyContent = 'center';
+                } else if (type === 'BISHOP') {
+                    div.innerHTML = `<svg width="26" height="26" viewBox="-10 -10 20 20" style="vertical-align: middle; fill: none; stroke: white; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
+                        <path d="M 2 -6 Q 5 -9 3 -11" stroke-width="1.5"/>
+                        <rect x="-1.5" y="-7.5" width="3" height="1.5" fill="white" rx="0.3"/>
+                        <circle cx="0" cy="1.5" r="6" stroke-width="2"/>
+                        <path d="M -2.5 -1 Q -3.5 1.5 -2.5 4" stroke-width="1"/>
+                    </svg>`;
+                    div.style.display = 'flex';
+                    div.style.alignItems = 'center';
+                    div.style.justifyContent = 'center';
+                } else if (type === 'BRUTE') {
+                    div.innerHTML = '';
+                    div.appendChild(createBruteIconSvg(26, 'white'));
+                    div.style.display = 'flex';
+                    div.style.alignItems = 'center';
+                    div.style.justifyContent = 'center';
+                } else {
+                    div.textContent = PIECE_TYPES[type].symbol;
+                }
+                div.dataset.type = type;
+
+                if (!remaining.includes(type)) {
+                    div.classList.add('placed');
+                }
+                if (gameState.placementSelectedType === type) {
+                    div.classList.add('selected');
+                }
+
+                div.addEventListener('click', () => {
+                    if (!remaining.includes(type)) return;
+                    gameState.placementSelectedType = type;
+                    updatePlacementUI();
+                    updatePlacementHighlights();
+                });
+
+                piecesContainer.appendChild(div);
+            });
+
+            updatePlacementHighlights();
+        }
+
+        function updatePlacementHighlights() {
+            clearHighlights();
+            if (gameState.phase !== 'placement') return;
+            const slots = gameState.placementSlots[gameState.currentPlayer] || [];
+            slots.forEach(slot => {
+                const hex = document.querySelector(`.hex[data-q="${slot.q}"][data-r="${slot.r}"]`);
+                if (hex) hex.classList.add('valid-move');
+            });
         }
 
 
@@ -4601,6 +5073,14 @@
                         div.style.display = 'flex';
                         div.style.alignItems = 'center';
                         div.style.justifyContent = 'center';
+                    } else if (piece.type === 'BRUTE') {
+                        const svgSize = 24;
+                        const strokeColor = piece.pinned ? '#5a5a5a' : 'white';
+                        div.innerHTML = '';
+                        div.appendChild(createBruteIconSvg(svgSize, strokeColor));
+                        div.style.display = 'flex';
+                        div.style.alignItems = 'center';
+                        div.style.justifyContent = 'center';
                     } else {
                         div.textContent = PIECE_TYPES[piece.type].symbol;
                     }
@@ -4669,6 +5149,12 @@
                             <path d="M 0 -4 L 3.5 -7.5 L 0 -11 L -3.5 -7.5 Z" fill="currentColor"/>
                             <path d="M 0 -11 L -1.5 -12.5 M 0 -11 L 1.5 -12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                         </svg>`;
+                    btn.style.display = 'flex';
+                    btn.style.alignItems = 'center';
+                    btn.style.justifyContent = 'center';
+                } else if (type === 'BRUTE') {
+                    btn.innerHTML = '';
+                    btn.appendChild(createBruteIconSvg(24, 'currentColor'));
                     btn.style.display = 'flex';
                     btn.style.alignItems = 'center';
                     btn.style.justifyContent = 'center';
@@ -4823,10 +5309,11 @@
 
         function startGame(mode = '2player') {
             gameState.gameMode = mode;
-            gameState.phase = 'playing';
+            // Start in placement phase
+            gameState.phase = 'placement';
             gameState.currentPlayer = 1;
             gameState.isFirstTurn = true;
-            // First player gets only 1 action on their first turn
+            // First player gets only 1 action on their first turn (after placement)
             gameState.actionsRemaining = 1;
             gameState.actionsPerTurn = gameState.params.actionsPerTurn;
 
@@ -4849,6 +5336,10 @@
             gameState.pinningMap.clear();
             gameState.forceFields = [];
             gameState.turnHistory = new Map(); // pieceIndex -> Set<ActionType>
+            gameState.placementSelectedType = null;
+            gameState.placementSlots = { 1: [], 2: [] };
+            gameState.placementRemaining = { 1: ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'], 2: ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'] };
+            gameState.placementPlacedCount = { 1: 0, 2: 0 };
 
             // Setup Timer
             const timerEnabled = document.getElementById('timer-enabled').checked;
@@ -4866,10 +5357,6 @@
                 gameState.reserveTimeRemaining = { 1: reserveMs, 2: reserveMs };
                 gameState.timerPaused = false;
                 gameState.lastTimestamp = performance.now();
-
-                // Start Timer Loop
-                if (gameState.timerInterval) cancelAnimationFrame(gameState.timerInterval);
-                requestAnimationFrame(gameLoop);
             }
             updateTimerUI();
 
@@ -4878,18 +5365,18 @@
             document.getElementById('mode-selection-modal').classList.remove('active');
 
             // Setup board
-            setupFixedPositions();
+            setupFixedPositions(true);
             saveTurnSnapshot();
             updatePins();
             updateUI();
             updateTimerUI();
             renderPieces();
             updateArmyDisplay();
+            updatePlacementUI();
 
             addLog('=== GAME STARTED ===', 'system');
-            addLog('=== GAME STARTED ===', 'system');
-            addLog(`2 Player Game`, 'system');
-            addLog(`Player 1's Turn (1 action)`, 'system');
+            addLog('Placement Phase: place Knight, Shield, Bomber on ring 4.', 'system');
+            addLog(`Player 1 Placement`, 'system');
         }
 
         function resetGame() {
@@ -4948,6 +5435,8 @@
                         cancelPathBuilding();
                     } else if (gameState.bombTargetingMode) {
                         exitBombTargetingMode();
+                    } else if (gameState.bruteSlideMode) {
+                        exitBruteSlideMode();
                     } else {
                         gameState.selectedPiece = null;
                         gameState.validMoves = [];
@@ -5111,6 +5600,12 @@
                         }
                     } else if (piece.type === 'ROOK') {
                         activateForceField(gameState.selectedPiece);
+                    } else if (piece.type === 'BRUTE') {
+                        if (gameState.bruteSlideMode) {
+                            exitBruteSlideMode();
+                        } else {
+                            activateBruteSlide(gameState.selectedPiece);
+                        }
                     } else if (piece.type !== 'PAWN') {
                         // Execute Alt Move for other power pieces
                         // For now, just consumes an action
