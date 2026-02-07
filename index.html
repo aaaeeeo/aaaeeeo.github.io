@@ -48,14 +48,19 @@
             background: var(--bg-dark);
             color: var(--text-primary);
             min-height: 100vh;
+            height: 100vh;
             overflow-x: hidden;
+            overflow-y: hidden;
         }
 
         .game-container {
             display: grid;
             grid-template-columns: 280px 1fr 320px;
             min-height: 100vh;
+            height: 100vh;
+            max-height: 100vh;
             gap: 0;
+            overflow: hidden;
         }
 
         /* Left Panel - Game State */
@@ -66,6 +71,7 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
+            overflow-y: auto;
         }
 
         .panel-right {
@@ -529,11 +535,13 @@
 
         .game-controls {
             position: absolute;
-            bottom: 24px;
+            bottom: 12px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
             gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         .btn {
@@ -557,6 +565,18 @@
             background: var(--accent-gold-dim);
             color: var(--bg-dark);
             border-color: var(--accent-gold);
+        }
+
+        @media (max-height: 850px) {
+            .game-controls {
+                bottom: 8px;
+                gap: 8px;
+            }
+
+            .btn {
+                padding: 8px 16px;
+                font-size: 11px;
+            }
         }
 
         .btn.primary:hover {
@@ -774,12 +794,12 @@
         .placement-pieces {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 4px;
         }
 
         .placement-piece {
-            width: 44px;
-            height: 44px;
+            width: 40px;
+            height: 40px;
             border-radius: 6px;
             display: flex;
             align-items: center;
@@ -895,14 +915,9 @@
 
             <div class="placement-palette" id="placement-panel" style="display: none; margin-top: 12px;">
                 <div style="font-weight: 600; margin-bottom: 8px;">Placement Phase</div>
-                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
-                    Place any 3 of 4 (Snake, Shield, Bomber, Brute) on the orange ring.
-                </div>
+
                 <div class="placement-pieces" id="placement-pieces"></div>
             </div>
-
-
-
 
 
             <div class="army-display">
