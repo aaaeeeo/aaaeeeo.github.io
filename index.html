@@ -294,16 +294,6 @@
 
         .hex.force-field {
             fill: rgba(147, 51, 234, 0.05);
-            /* Removed !important to allow path highlights to override if needed, 
-               but path highlights don't usually set stroke-width this high, so maybe keep it?
-               Actually, path-step sets stroke. If we want path stroke to win, we must remove !important.
-               But if we want force field border + path fill, we can keep !important stroke?
-               User said: "moving... inside... should still show these [path highlights]".
-               Path highlights are primarily FILL (blue/green).
-               Path OUTLINE is also blue.
-               If we allow Blue Stroke to win, the purple border vanishes on path cells.
-               Let's try removing !important so standard cascade works.
-            */
             stroke: #d8b4fe;
             stroke-width: 3px;
             filter: drop-shadow(0 0 5px rgba(168, 85, 247, 0.8));
@@ -389,22 +379,6 @@
             font-weight: bold;
             filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.8));
         }
-
-        @keyframes blink-red {
-
-            0%,
-            100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: 0.4;
-                transform: scale(0.8);
-            }
-        }
-
-
 
         .piece-stat.hp {
             fill: #df24ff;
@@ -1151,7 +1125,6 @@
             usedPieces: new Set(),
             hasAnyPieceMoved: false,
             pieces: [],
-            board: new Map(), // hex key -> piece
             pinningPaths: [], // Store paths that create pins for visualization
             pinningMap: new Map(), // Map: enemy piece index -> Set of ally piece indices that are pinning it
             previewPinningPaths: [], // Store preview pinning paths when building a move
@@ -1173,10 +1146,6 @@
             },
             unitConfigs: {},
             turnSnapshot: null,
-            unitConfigs: {},
-            turnSnapshot: null,
-            lanceTargetingMode: false,
-            lanceTargetingRays: [],
             lanceTargetingMode: false,
             lanceTargetingRays: [],
             forceFields: [], // {q, r, player} - Shields create these
@@ -1275,11 +1244,6 @@
 
         function hexKey(q, r) {
             return `${q},${r}`;
-        }
-
-        function parseHexKey(key) {
-            const [q, r] = key.split(',').map(Number);
-            return { q, r };
         }
 
         function hexToPixel(q, r) {
