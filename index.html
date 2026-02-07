@@ -1047,29 +1047,48 @@
             ROOK: { symbol: '🛡️', name: 'Shield', defaultHP: 6, isKing: false },
             BISHOP: { symbol: '💣', name: 'Bomber', defaultHP: 4, isKing: false },
             ARCHER: { symbol: '☾', name: 'Archer', defaultHP: 4, isKing: false },
-            BRUTE: { symbol: '💪', name: 'Brute', defaultHP: 2, isKing: false },
+            BRUTE: { symbol: '🥊', name: 'Monk', defaultHP: 2, isKing: false },
             GHOST: { symbol: '👻', name: 'Soul Echo', defaultHP: 1, isKing: false, isGhost: true },
         };
-        const BRUTE_ICON_SRC = 'file:///Users/lialx/.cursor/projects/Users-lialx-throne/assets/biceps_010-48892aae-ec9e-4ca4-bf62-d63acf278cbf.png';
-        const BRUTE_ICON_SIZE = 350;
 
-        function createBruteIconSvg(size, color) {
+        // Monk icon (Muay Thai wrapped fist) source image (black lines on white background)
+        const MONK_ICON_SRC = 'file:///Users/lialx/.cursor/projects/Users-lialx-throne/assets/png-clipart-computer-icons-punch-fist-punch-text-logo-b77ae212-f32b-42fa-a954-414efff9c16c.png';
+        const MONK_ICON_W = 900;
+        const MONK_ICON_H = 900;
+
+        function createMonkIconSvg(size, color) {
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             svg.setAttribute('width', size);
             svg.setAttribute('height', size);
-            svg.setAttribute('viewBox', `0 0 ${BRUTE_ICON_SIZE} ${BRUTE_ICON_SIZE}`);
+            svg.setAttribute('viewBox', `0 0 ${MONK_ICON_W} ${MONK_ICON_H}`);
 
             const uid = Math.random().toString(36).slice(2);
-            const filterId = `brute-invert-${uid}`;
-            const maskId = `brute-mask-${uid}`;
+            const filterId = `monk-invert-${uid}`;
+            const maskId = `monk-mask-${uid}`;
 
             const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+            // Invert the source image so black linework becomes white (opaque in mask),
+            // while the white background becomes black (transparent in mask).
             const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
             filter.setAttribute('id', filterId);
             const matrix = document.createElementNS('http://www.w3.org/2000/svg', 'feColorMatrix');
             matrix.setAttribute('type', 'matrix');
-            matrix.setAttribute('values', '-1 0 0 0 1 0 -1 0 0 1 0 0 -1 0 1 0 0 0 1 0');
+            matrix.setAttribute('values', '-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0');
             filter.appendChild(matrix);
+
+            // Boost contrast after inversion so near-black becomes fully transparent in mask
+            // (prevents light/gray "background" pixels from showing as a tinted box).
+            const ct = document.createElementNS('http://www.w3.org/2000/svg', 'feComponentTransfer');
+            const fns = ['feFuncR', 'feFuncG', 'feFuncB', 'feFuncA'];
+            fns.forEach(name => {
+                const fn = document.createElementNS('http://www.w3.org/2000/svg', name);
+                fn.setAttribute('type', 'linear');
+                fn.setAttribute('slope', '6');
+                fn.setAttribute('intercept', '-2.5');
+                ct.appendChild(fn);
+            });
+            filter.appendChild(ct);
             defs.appendChild(filter);
 
             const mask = document.createElementNS('http://www.w3.org/2000/svg', 'mask');
@@ -1077,24 +1096,27 @@
             mask.setAttribute('maskUnits', 'userSpaceOnUse');
             mask.setAttribute('x', '0');
             mask.setAttribute('y', '0');
-            mask.setAttribute('width', String(BRUTE_ICON_SIZE));
-            mask.setAttribute('height', String(BRUTE_ICON_SIZE));
+            mask.setAttribute('width', String(MONK_ICON_W));
+            mask.setAttribute('height', String(MONK_ICON_H));
+
             const maskImage = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-            maskImage.setAttribute('href', BRUTE_ICON_SRC);
+            maskImage.setAttribute('href', MONK_ICON_SRC);
             maskImage.setAttribute('x', '0');
             maskImage.setAttribute('y', '0');
-            maskImage.setAttribute('width', String(BRUTE_ICON_SIZE));
-            maskImage.setAttribute('height', String(BRUTE_ICON_SIZE));
+            maskImage.setAttribute('width', String(MONK_ICON_W));
+            maskImage.setAttribute('height', String(MONK_ICON_H));
+            maskImage.setAttribute('preserveAspectRatio', 'xMidYMid meet');
             maskImage.setAttribute('filter', `url(#${filterId})`);
             mask.appendChild(maskImage);
             defs.appendChild(mask);
             svg.appendChild(defs);
 
+            // Fill a rect with the desired color, masked by the linework.
             const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             rect.setAttribute('x', '0');
             rect.setAttribute('y', '0');
-            rect.setAttribute('width', String(BRUTE_ICON_SIZE));
-            rect.setAttribute('height', String(BRUTE_ICON_SIZE));
+            rect.setAttribute('width', String(MONK_ICON_W));
+            rect.setAttribute('height', String(MONK_ICON_H));
             rect.setAttribute('fill', color);
             rect.setAttribute('mask', `url(#${maskId})`);
             svg.appendChild(rect);
@@ -1202,10 +1224,10 @@
                 hp: 6,
                 ramDamage: 3
             };
-            // Bishop: straight line
+            // Bishop: direct jump
             gameState.unitConfigs['BISHOP'] = {
-                range: 5,
-                template: MOVEMENT_TEMPLATES.STRAIGHT_LINE,
+                range: 3,
+                template: MOVEMENT_TEMPLATES.DIRECT_JUMP,
                 hp: 4,
                 ramDamage: 2
             };
@@ -1216,10 +1238,10 @@
                 hp: 4,
                 ramDamage: 2
             };
-            // Brute: same as pawn for now
+            // Brute: straight line
             gameState.unitConfigs['BRUTE'] = {
-                range: 3,
-                template: MOVEMENT_TEMPLATES.DIRECT_JUMP,
+                range: 5,
+                template: MOVEMENT_TEMPLATES.STRAIGHT_LINE,
                 hp: 3,
                 ramDamage: 2
             };
@@ -1808,7 +1830,7 @@
                     iconGroup.setAttribute('pointer-events', 'none');
                     g.appendChild(iconGroup);
                 } else if (piece.type === 'BRUTE') {
-                    const bruteIcon = createBruteIconSvg(24, 'white');
+                    const bruteIcon = createMonkIconSvg(24, 'white');
                     bruteIcon.setAttribute('x', x - 12);
                     bruteIcon.setAttribute('y', y - 12);
                     bruteIcon.setAttribute('pointer-events', 'none');
@@ -4954,7 +4976,7 @@
                     div.style.justifyContent = 'center';
                 } else if (type === 'BRUTE') {
                     div.innerHTML = '';
-                    div.appendChild(createBruteIconSvg(26, 'white'));
+                    div.appendChild(createMonkIconSvg(26, 'white'));
                     div.style.display = 'flex';
                     div.style.alignItems = 'center';
                     div.style.justifyContent = 'center';
@@ -5077,7 +5099,7 @@
                         const svgSize = 24;
                         const strokeColor = piece.pinned ? '#5a5a5a' : 'white';
                         div.innerHTML = '';
-                        div.appendChild(createBruteIconSvg(svgSize, strokeColor));
+                        div.appendChild(createMonkIconSvg(svgSize, strokeColor));
                         div.style.display = 'flex';
                         div.style.alignItems = 'center';
                         div.style.justifyContent = 'center';
@@ -5154,7 +5176,7 @@
                     btn.style.justifyContent = 'center';
                 } else if (type === 'BRUTE') {
                     btn.innerHTML = '';
-                    btn.appendChild(createBruteIconSvg(24, 'currentColor'));
+                    btn.appendChild(createMonkIconSvg(24, 'currentColor'));
                     btn.style.display = 'flex';
                     btn.style.alignItems = 'center';
                     btn.style.justifyContent = 'center';
@@ -5195,14 +5217,10 @@
 
             document.getElementById('unit-hp').value = config.hp === Infinity ? 999 : config.hp;
 
-            // Disable Max HP if it's Infinity (King) or if any piece has ever moved
+            // Disable Max HP if it's Infinity (King)
             const hpInput = document.getElementById('unit-hp');
-            hpInput.disabled = config.hp === Infinity || gameState.hasAnyPieceMoved;
-            if (gameState.hasAnyPieceMoved) {
-                hpInput.title = 'Cannot change Max HP: pieces have already moved';
-            } else {
-                hpInput.title = '';
-            }
+            hpInput.disabled = config.hp === Infinity;
+            hpInput.title = '';
 
             document.getElementById('unit-ram-damage').value = config.ramDamage;
 
@@ -5222,7 +5240,8 @@
             // Create template buttons
             const templates = [
                 { id: MOVEMENT_TEMPLATES.FREE_MOTION, label: 'Free Motion', desc: 'Move in any direction' },
-                { id: MOVEMENT_TEMPLATES.STRAIGHT_LINE, label: 'Straight Line', desc: 'Pick one direction, continue straight' }
+                { id: MOVEMENT_TEMPLATES.STRAIGHT_LINE, label: 'Straight Line', desc: 'Pick one direction, continue straight' },
+                { id: MOVEMENT_TEMPLATES.DIRECT_JUMP, label: 'Direct Jump', desc: 'Teleport to destination in range' }
             ];
 
             templates.forEach(template => {
@@ -5247,14 +5266,6 @@
             document.getElementById('unit-hp').addEventListener('input', (e) => {
                 const type = document.getElementById('unit-details').dataset.type;
                 if (type) {
-                    // Check if any piece has ever moved
-                    if (gameState.hasAnyPieceMoved) {
-                        // Revert the value - can't change if pieces have moved
-                        const config = gameState.unitConfigs[type];
-                        e.target.value = config.hp === Infinity ? 999 : config.hp;
-                        return;
-                    }
-
                     const value = parseInt(e.target.value);
                     const newHP = value === 999 ? Infinity : value;
                     gameState.unitConfigs[type].hp = newHP;
