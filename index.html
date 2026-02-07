@@ -3669,6 +3669,7 @@
         }
 
         function canPiecePerformAction(pieceIndex, actionType) {
+            if (gameState.actionsRemaining <= 0) return false;
             const piece = gameState.pieces[pieceIndex];
             const history = getPieceActionHistory(pieceIndex);
 
@@ -3692,6 +3693,10 @@
         }
 
         function useAction(pieceIndex, actionType = 'MOVE') {
+            if (gameState.actionsRemaining <= 0) {
+                addLog('No actions remaining. End your turn.', 'system');
+                return;
+            }
             const history = getPieceActionHistory(pieceIndex);
             history.add(actionType);
 
