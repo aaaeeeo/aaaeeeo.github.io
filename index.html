@@ -1166,8 +1166,8 @@
             placementSlots: { 1: [], 2: [] },
             placementRemaining: { 1: [], 2: [] },
             placementPlacedCount: { 1: 0, 2: 0 },
-            bruteSlideMode: false,
-            bruteSlideSource: null,
+            monkSlideMode: false,
+            monkSlideSource: null,
             params: {
                 actionsPerTurn: 2
             },
@@ -1253,7 +1253,7 @@
                 hp: 4,
                 ramDamage: 2
             };
-            // Brute: straight line
+            // Monk: straight line
             gameState.unitConfigs['BRUTE'] = {
                 range: 5,
                 template: MOVEMENT_TEMPLATES.STRAIGHT_LINE,
@@ -1845,11 +1845,11 @@
                     iconGroup.setAttribute('pointer-events', 'none');
                     g.appendChild(iconGroup);
                 } else if (piece.type === 'BRUTE') {
-                    const bruteIcon = createMonkIconSvg(24, 'white');
-                    bruteIcon.setAttribute('x', x - 12);
-                    bruteIcon.setAttribute('y', y - 12);
-                    bruteIcon.setAttribute('pointer-events', 'none');
-                    g.appendChild(bruteIcon);
+                    const monkIcon = createMonkIconSvg(24, 'white');
+                    monkIcon.setAttribute('x', x - 12);
+                    monkIcon.setAttribute('y', y - 12);
+                    monkIcon.setAttribute('pointer-events', 'none');
+                    g.appendChild(monkIcon);
                 } else if (piece.type === 'GHOST') {
                     // Ghost piece - use spectral ghost icon
                     const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -3866,7 +3866,7 @@
             if (gameState.rotationMode) exitRotationMode();
             if (gameState.lanceTargetingMode) exitLanceTargetingMode();
             if (gameState.bombTargetingMode) exitBombTargetingMode();
-            if (gameState.bruteSlideMode) exitBruteSlideMode();
+            if (gameState.monkSlideMode) exitMonkSlideMode();
 
             gameState.forceFields = []; // Reset force fields on turn reset (simple approach) or restore from snapshot if we added it?
             // Snapshot doesn't have forceFields yet. We should add it to snapshot.
@@ -4015,7 +4015,7 @@
             addLog(`Player 1's Turn (1 action)`, 'system');
         }
 
-        function activateBruteSlide(pieceIndex) {
+        function activateMonkSlide(pieceIndex) {
             const piece = gameState.pieces[pieceIndex];
             if (piece.pinned) {
                 addLog('Pinned pieces cannot move or take actions!', 'system');
@@ -4025,8 +4025,8 @@
                 addLog('Alt action already used this turn.', 'system');
                 return;
             }
-            gameState.bruteSlideMode = true;
-            gameState.bruteSlideSource = pieceIndex;
+            gameState.monkSlideMode = true;
+            gameState.monkSlideSource = pieceIndex;
             gameState.selectedPiece = pieceIndex;
             addLog('Select an adjacent unit to slide.', 'system');
 
@@ -4042,27 +4042,27 @@
             }
         }
 
-        function exitBruteSlideMode() {
-            gameState.bruteSlideMode = false;
-            gameState.bruteSlideSource = null;
+        function exitMonkSlideMode() {
+            gameState.monkSlideMode = false;
+            gameState.monkSlideSource = null;
             clearHighlights();
             renderPieces();
         }
 
-        function executeBruteSlide(bruteIndex, targetIndex) {
-            const brute = gameState.pieces[bruteIndex];
+        function executeMonkSlide(monkIndex, targetIndex) {
+            const monk = gameState.pieces[monkIndex];
             const target = gameState.pieces[targetIndex];
-            if (!brute || !target) return;
-            if (target.player !== brute.player) {
-                addLog('Brute can only slide allies.', 'system');
-                exitBruteSlideMode();
+            if (!monk || !target) return;
+            if (target.player !== monk.player) {
+                addLog('Monk can only slide allies.', 'system');
+                exitMonkSlideMode();
                 return;
             }
 
-            // Determine direction from brute to target
+            // Determine direction from monk to target
             let direction = -1;
             for (let dir = 0; dir < 6; dir++) {
-                const n = hexNeighbor(brute.q, brute.r, dir);
+                const n = hexNeighbor(monk.q, monk.r, dir);
                 if (n.q === target.q && n.r === target.r) {
                     direction = dir;
                     break;
@@ -4070,11 +4070,11 @@
             }
             if (direction < 0) {
                 addLog('Slide target must be adjacent.', 'system');
-                exitBruteSlideMode();
+                exitMonkSlideMode();
                 return;
             }
 
-            // Slide target in the same direction away from brute
+            // Slide target in the same direction away from monk
             let current = { q: target.q, r: target.r };
             let next = hexNeighbor(current.q, current.r, direction);
             let moved = false;
@@ -4092,13 +4092,13 @@
 
             if (!moved) {
                 addLog('No space to slide.', 'system');
-                exitBruteSlideMode();
+                exitMonkSlideMode();
                 return;
             }
 
             target.q = current.q;
             target.r = current.r;
-            addLog(`${PIECE_TYPES[brute.type].name} slides ${PIECE_TYPES[target.type].name} to (${current.q}, ${current.r})`, brute.player);
+            addLog(`${PIECE_TYPES[monk.type].name} slides ${PIECE_TYPES[target.type].name} to (${current.q}, ${current.r})`, monk.player);
 
             if (target.type === 'GHOST') {
                 const ghostEntry = gameState.ghosts.find(g => g.owner === target.summonerIndex);
@@ -4122,8 +4122,8 @@
                 return;
             }
 
-            useAction(bruteIndex, 'ALT');
-            exitBruteSlideMode();
+            useAction(monkIndex, 'ALT');
+            exitMonkSlideMode();
             updatePins();
             renderPieces();
             updateArmyDisplay();
@@ -4194,8 +4194,8 @@
                 return;
             }
 
-            // Brute Slide targeting mode (must select adjacent unit)
-            if (gameState.bruteSlideMode) {
+            // Monk Slide targeting mode (must select adjacent unit)
+            if (gameState.monkSlideMode) {
                 addLog('Select an adjacent unit to slide.', 'system');
                 return;
             }
@@ -4252,17 +4252,17 @@
                 return;
             }
 
-            // Brute slide targeting mode
-            if (gameState.bruteSlideMode && gameState.bruteSlideSource !== null) {
-                const bruteIndex = gameState.bruteSlideSource;
-                if (index === bruteIndex) return;
-                const brute = gameState.pieces[bruteIndex];
-                if (hexDistance(brute.q, brute.r, piece.q, piece.r) !== 1) {
+            // Monk slide targeting mode
+            if (gameState.monkSlideMode && gameState.monkSlideSource !== null) {
+                const monkIndex = gameState.monkSlideSource;
+                if (index === monkIndex) return;
+                const monk = gameState.pieces[monkIndex];
+                if (hexDistance(monk.q, monk.r, piece.q, piece.r) !== 1) {
                     addLog('Slide target must be adjacent.', 'system');
-                    exitBruteSlideMode();
+                    exitMonkSlideMode();
                     return;
                 }
-                executeBruteSlide(bruteIndex, index);
+                executeMonkSlide(monkIndex, index);
                 return;
             }
 
@@ -4442,8 +4442,8 @@
             if (gameState.bombTargetingMode) {
                 gameState.bombTargetingMode = false;
             }
-            if (gameState.bruteSlideMode) {
-                exitBruteSlideMode();
+            if (gameState.monkSlideMode) {
+                exitMonkSlideMode();
             }
             if (gameState.ghostTargetingMode) {
                 gameState.ghostTargetingMode = false;
@@ -5542,8 +5542,8 @@
                         cancelPathBuilding();
                     } else if (gameState.bombTargetingMode) {
                         exitBombTargetingMode();
-                    } else if (gameState.bruteSlideMode) {
-                        exitBruteSlideMode();
+                    } else if (gameState.monkSlideMode) {
+                        exitMonkSlideMode();
                     } else {
                         gameState.selectedPiece = null;
                         gameState.validMoves = [];
@@ -5708,10 +5708,10 @@
                     } else if (piece.type === 'ROOK') {
                         activateForceField(gameState.selectedPiece);
                     } else if (piece.type === 'BRUTE') {
-                        if (gameState.bruteSlideMode) {
-                            exitBruteSlideMode();
+                        if (gameState.monkSlideMode) {
+                            exitMonkSlideMode();
                         } else {
-                            activateBruteSlide(gameState.selectedPiece);
+                            activateMonkSlide(gameState.selectedPiece);
                         }
                     } else if (piece.type !== 'PAWN') {
                         // Execute Alt Move for other power pieces
