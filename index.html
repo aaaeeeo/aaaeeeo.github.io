@@ -3808,6 +3808,29 @@
         }
 
         function resetTurn() {
+            if (gameState.phase === 'placement') {
+                const player = gameState.currentPlayer;
+                const replacableTypes = ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'];
+
+                // Remove current player's placed pieces from the board
+                gameState.pieces = gameState.pieces.filter(piece => {
+                    return !(piece.alive && piece.player === player && replacableTypes.includes(piece.type));
+                });
+
+                // Reset placement state for current player only
+                gameState.placementSelectedType = null;
+                gameState.placementRemaining[player] = ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'];
+                gameState.placementPlacedCount[player] = 0;
+
+                updatePins();
+                updateUI();
+                updateArmyDisplay();
+                updatePlacementUI();
+                renderPieces();
+
+                addLog(`Player ${player} placement reset.`, 'system');
+                return;
+            }
             if (!gameState.turnSnapshot) return;
 
             gameState.pieces = JSON.parse(JSON.stringify(gameState.turnSnapshot.pieces));
@@ -3878,9 +3901,62 @@
                 return;
             }
 
-            if (getPieceAt(q, r)) {
-                addLog('That hex is already occupied.', 'system');
+            const occupant = getPieceAt(q, r);
+            const replacableTypes = ['KNIGHT', 'ROOK', 'BISHOP', 'BRUTE'];
+
+            if (!selectedType) {
+                if (!occupant) {
+                    addLog('Select a piece to place.', 'system');
+                    return;
+                }
+                if (occupant.player !== player || !replacableTypes.includes(occupant.type)) {
+                    addLog('That hex is already occupied.', 'system');
+                    return;
+                }
+
+                // Return the placed piece to the pool
+                const removeIndex = gameState.pieces.findIndex(p => p.alive && p.q === occupant.q && p.r === occupant.r);
+                if (removeIndex >= 0) {
+                    gameState.pieces.splice(removeIndex, 1);
+                }
+                const remaining = gameState.placementRemaining[player] || [];
+                if (!remaining.includes(occupant.type)) {
+                    remaining.push(occupant.type);
+                }
+                gameState.placementRemaining[player] = remaining;
+                gameState.placementPlacedCount[player] = Math.max(
+                    0,
+                    (gameState.placementPlacedCount[player] || 0) - 1
+                );
+
+                updatePins();
+                renderPieces();
+                updateArmyDisplay();
+                updatePlacementUI();
+                updatePlacementHighlights();
                 return;
+            }
+
+            if (occupant) {
+                if (occupant.player !== player || !replacableTypes.includes(occupant.type)) {
+                    addLog('That hex is already occupied.', 'system');
+                    return;
+                }
+
+                // Replace existing placed piece
+                const removeIndex = gameState.pieces.findIndex(p => p.alive && p.q === occupant.q && p.r === occupant.r);
+                if (removeIndex >= 0) {
+                    gameState.pieces.splice(removeIndex, 1);
+                }
+                const remaining = gameState.placementRemaining[player] || [];
+                if (!remaining.includes(occupant.type)) {
+                    remaining.push(occupant.type);
+                }
+                gameState.placementRemaining[player] = remaining;
+                gameState.placementPlacedCount[player] = Math.max(
+                    0,
+                    (gameState.placementPlacedCount[player] || 0) - 1
+                );
             }
 
             createPiece(selectedType, player, q, r);
@@ -4930,8 +5006,12 @@
             // Reset Turn button enablement
             const resetTurnBtn = document.getElementById('btn-reset-turn');
             if (resetTurnBtn) {
-                const totalActionsForTurn = gameState.isFirstTurn ? 1 : gameState.params.actionsPerTurn;
-                resetTurnBtn.disabled = !canInteract || gameState.actionsRemaining >= totalActionsForTurn;
+                if (gameState.phase === 'placement') {
+                    resetTurnBtn.disabled = false;
+                } else {
+                    const totalActionsForTurn = gameState.isFirstTurn ? 1 : gameState.params.actionsPerTurn;
+                    resetTurnBtn.disabled = !canInteract || gameState.actionsRemaining >= totalActionsForTurn;
+                }
             }
 
             updatePlacementUI();
