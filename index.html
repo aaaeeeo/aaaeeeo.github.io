@@ -1167,8 +1167,6 @@
 
             // Ghost State
             ghosts: [], // { owner: pieceIndex, q, r, player }
-            ghostTargetingMode: false,
-            ghostTargetingSnake: null // pieceIndex of the Snake using Use Ghost
         };
 
         // Movement templates
@@ -2912,15 +2910,17 @@
                 );
             }
 
-            // If a Snake (Snake) dies, remove its summoned ghost
+            // If a Snake dies, remove all its summoned ghosts
             if (piece.type === 'SNAKE') {
-                const ownedGhost = gameState.pieces.find(p =>
+                const ownedGhosts = gameState.pieces.filter(p =>
                     p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
                 );
-                if (ownedGhost) {
-                    ownedGhost.alive = false;
+                if (ownedGhosts.length > 0) {
+                    ownedGhosts.forEach(g => {
+                        g.alive = false;
+                    });
                     gameState.ghosts = gameState.ghosts.filter(g => g.owner !== pieceIndex);
-                    addLog(`${piece.player === 1 ? 'P1' : 'P2'} Soul Echo fades away...`, piece.player);
+                    addLog(`${piece.player === 1 ? 'P1' : 'P2'} Soul Echoes fade away...`, piece.player);
                 }
             }
         }
@@ -4230,25 +4230,6 @@
                 return;
             }
 
-            // In ghost targeting mode, clicking on an ally piece selects it as the target
-            if (gameState.ghostTargetingMode && gameState.ghostTargetingSnake !== null) {
-                const snake = gameState.pieces[gameState.ghostTargetingSnake];
-
-                // Check if valid target (ally, not King, not Ghost - INCLUDING the Snake itself)
-                if (piece.player === snake.player &&
-                    !PIECE_TYPES[piece.type].isKing &&
-                    piece.type !== 'GHOST') {
-                    executeUseGhost(gameState.ghostTargetingSnake, index);
-                } else if (PIECE_TYPES[piece.type].isKing) {
-                    addLog('Cannot use Ghost on King!', 'system');
-                } else if (piece.type === 'GHOST') {
-                    addLog('Cannot use Ghost on another Ghost!', 'system');
-                } else if (piece.player !== snake.player) {
-                    addLog('Can only use Ghost on ally pieces!', 'system');
-                }
-                return;
-            }
-
             // If selecting a different piece, check for bomb targeting
             if (gameState.bombTargetingMode && gameState.selectedPiece !== index) {
                 const targetPiece = gameState.pieces[index];
@@ -4356,24 +4337,7 @@
                 } else if (piece.type === 'MONK') {
                     rotateBtn.innerHTML = '⚡ Slide';
                 } else if (piece.type === 'SNAKE') {
-                    const existingGhost = gameState.pieces.find(p =>
-                        p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
-                    );
-                    if (existingGhost) {
-                        // Check if Snake is on same cell as ghost
-                        const onSameCell = piece.q === existingGhost.q && piece.r === existingGhost.r;
-                        if (onSameCell) {
-                            rotateBtn.innerHTML = '👻 Use Ghost';
-                            rotateBtn.disabled = true;
-                            rotateBtn.style.opacity = '0.5';
-                            rotateBtn.style.cursor = 'not-allowed';
-                            rotateBtn.title = 'Move away from ghost to use it';
-                        } else {
-                            rotateBtn.innerHTML = '👻 Use Ghost';
-                        }
-                    } else {
-                        rotateBtn.innerHTML = '⚡ Summon Ghost';
-                    }
+                    rotateBtn.innerHTML = '⚡ Summon Ghost';
                 } else {
                     rotateBtn.innerHTML = '⚡ Alt Move';
                 }
@@ -4408,10 +4372,6 @@
             }
             if (gameState.monkSlideMode) {
                 exitMonkSlideMode();
-            }
-            if (gameState.ghostTargetingMode) {
-                gameState.ghostTargetingMode = false;
-                gameState.ghostTargetingSnake = null;
             }
 
             clearHighlights();
@@ -4657,27 +4617,12 @@
         // ============================================
         function activateGhost(pieceIndex) {
             const piece = gameState.pieces[pieceIndex];
-
-            // Check if Snake already has an active ghost
-            const existingGhost = gameState.pieces.find(p =>
-                p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
-            );
-
-            if (existingGhost) {
-                // Check if Snake is on same cell as ghost - shouldn't happen but safety check
-                if (piece.q === existingGhost.q && piece.r === existingGhost.r) {
-                    addLog('Move away from ghost to use it!', 'system');
-                    return;
-                }
-
-                // USE GHOST mode - enter targeting mode to select an ally
-                enterGhostTargetingMode(pieceIndex);
+            // SUMMON GHOST mode - create a new ghost (unlimited)
+            const ghostAtCell = getGhostPieceAt(piece.q, piece.r);
+            if (ghostAtCell) {
+                addLog('Cannot summon Ghost on an occupied ghost cell.', 'system');
                 return;
             }
-
-            // SUMMON GHOST mode - create new ghost
-            // Clean up old ghosts array entries (shouldn't be any, but just in case)
-            gameState.ghosts = gameState.ghosts.filter(g => g.owner !== pieceIndex);
 
             // Create ghost as an actual piece
             const ghostPiece = {
@@ -4711,105 +4656,6 @@
         // Helper to find ghost piece by position
         function getGhostPieceAt(q, r) {
             return gameState.pieces.find(p => p.alive && p.type === 'GHOST' && p.q === q && p.r === r);
-        }
-
-        function enterGhostTargetingMode(snakeIndex) {
-            gameState.ghostTargetingMode = true;
-            gameState.ghostTargetingSnake = snakeIndex;
-            gameState.selectedPiece = snakeIndex;
-
-            addLog('Select a piece to use Ghost on (yourself or ally, not King)', 'system');
-
-            // Show cancel button
-            document.getElementById('btn-cancel-path').style.display = 'inline-block';
-
-            // Highlight valid ally pieces (same player, not King, not Ghost, INCLUDING the Snake itself)
-            const snake = gameState.pieces[snakeIndex];
-            clearHighlights();
-
-            gameState.pieces.forEach((p, idx) => {
-                if (p.alive && p.player === snake.player &&
-                    !PIECE_TYPES[p.type].isKing && p.type !== 'GHOST') {
-                    const hex = document.querySelector(`.hex[data-q="${p.q}"][data-r="${p.r}"]`);
-                    if (hex) hex.classList.add('valid-move');
-                }
-            });
-
-            updateUI();
-        }
-
-        function exitGhostTargetingMode() {
-            gameState.ghostTargetingMode = false;
-            gameState.ghostTargetingSnake = null;
-            clearHighlights();
-            document.getElementById('btn-cancel-path').style.display = 'none';
-            updateUI();
-        }
-
-        function executeUseGhost(snakeIndex, targetPieceIndex) {
-            const snake = gameState.pieces[snakeIndex];
-            const target = gameState.pieces[targetPieceIndex];
-
-            if (!target || !target.alive) {
-                addLog('Invalid target!', 'system');
-                exitGhostTargetingMode();
-                return;
-            }
-
-            // Validate target is valid (same player, not King, not Ghost)
-            if (target.player !== snake.player || PIECE_TYPES[target.type].isKing || target.type === 'GHOST') {
-                addLog('Invalid target for Use Ghost!', 'system');
-                exitGhostTargetingMode();
-                return;
-            }
-
-            // Find the Snake's ghost
-            const ghost = gameState.pieces.find(p =>
-                p.alive && p.type === 'GHOST' && p.summonerIndex === snakeIndex
-            );
-
-            if (!ghost) {
-                addLog('Ghost not found!', 'system');
-                exitGhostTargetingMode();
-                return;
-            }
-
-            // Store positions
-            const targetQ = target.q;
-            const targetR = target.r;
-            const ghostQ = ghost.q;
-            const ghostR = ghost.r;
-
-            // Swap positions: target goes to ghost position, ghost goes to target position
-            target.q = ghostQ;
-            target.r = ghostR;
-            ghost.q = targetQ;
-            ghost.r = targetR;
-
-            // Also update the ghosts array entry
-            const ghostEntry = gameState.ghosts.find(g => g.owner === snakeIndex);
-            if (ghostEntry) {
-                ghostEntry.q = targetQ;
-                ghostEntry.r = targetR;
-            }
-
-            addLog(`${PIECE_TYPES[target.type].name} swaps positions with Soul Echo!`, snake.player);
-            useAction(snakeIndex, 'ALT');
-
-            // Check for Archer Ascension (reaching outer ring)
-            if (target.type === 'ARCHER' && !target.altMoveUnlocked) {
-                if (getRing(target.q, target.r) === BOARD_RADIUS) {
-                    target.altMoveUnlocked = true;
-                    addLog('ARCHER reached the edge! Shoot Arrow Unlocked.', 'system');
-                }
-            }
-
-            // Update pins after the swap
-            updatePins();
-            renderPieces();
-
-            exitGhostTargetingMode();
-            cancelPathBuilding();
         }
 
         function detonateBomb(bomb) {
