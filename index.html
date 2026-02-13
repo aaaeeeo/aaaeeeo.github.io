@@ -1036,24 +1036,24 @@
             SHIELD: { symbol: '🛡️', name: 'Shield', defaultHP: 6, isKing: false },
             BOMBER: { symbol: '💣', name: 'Bomber', defaultHP: 4, isKing: false },
             ARCHER: { symbol: '☾', name: 'Archer', defaultHP: 4, isKing: false },
-            MONK: { symbol: '🥊', name: 'Monk', defaultHP: 2, isKing: false },
+            BOXER: { symbol: '🥊', name: 'Boxer', defaultHP: 2, isKing: false },
             GHOST: { symbol: '👻', name: 'Soul Echo', defaultHP: 1, isKing: false, isGhost: true },
         };
 
-        // Monk icon (Muay Thai wrapped fist) source image (black lines on white background)
-        const MONK_ICON_SRC = './monk_icon.png';
-        const MONK_ICON_W = 900;
-        const MONK_ICON_H = 900;
+        // Boxer icon (Muay Thai wrapped fist) source image (black lines on white background)
+        const BOXER_ICON_SRC = './boxer_icon.png';
+        const BOXER_ICON_W = 900;
+        const BOXER_ICON_H = 900;
 
-        function createMonkIconSvg(size, color) {
+        function createBoxerIconSvg(size, color) {
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             svg.setAttribute('width', size);
             svg.setAttribute('height', size);
-            svg.setAttribute('viewBox', `0 0 ${MONK_ICON_W} ${MONK_ICON_H}`);
+            svg.setAttribute('viewBox', `0 0 ${BOXER_ICON_W} ${BOXER_ICON_H}`);
 
             const uid = Math.random().toString(36).slice(2);
-            const filterId = `monk-invert-${uid}`;
-            const maskId = `monk-mask-${uid}`;
+            const filterId = `boxer-invert-${uid}`;
+            const maskId = `boxer-mask-${uid}`;
 
             const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
 
@@ -1085,15 +1085,15 @@
             mask.setAttribute('maskUnits', 'userSpaceOnUse');
             mask.setAttribute('x', '0');
             mask.setAttribute('y', '0');
-            mask.setAttribute('width', String(MONK_ICON_W));
-            mask.setAttribute('height', String(MONK_ICON_H));
+            mask.setAttribute('width', String(BOXER_ICON_W));
+            mask.setAttribute('height', String(BOXER_ICON_H));
 
             const maskImage = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-            maskImage.setAttribute('href', MONK_ICON_SRC);
+            maskImage.setAttribute('href', BOXER_ICON_SRC);
             maskImage.setAttribute('x', '0');
             maskImage.setAttribute('y', '0');
-            maskImage.setAttribute('width', String(MONK_ICON_W));
-            maskImage.setAttribute('height', String(MONK_ICON_H));
+            maskImage.setAttribute('width', String(BOXER_ICON_W));
+            maskImage.setAttribute('height', String(BOXER_ICON_H));
             maskImage.setAttribute('preserveAspectRatio', 'xMidYMid meet');
             maskImage.setAttribute('filter', `url(#${filterId})`);
             mask.appendChild(maskImage);
@@ -1104,8 +1104,8 @@
             const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             rect.setAttribute('x', '0');
             rect.setAttribute('y', '0');
-            rect.setAttribute('width', String(MONK_ICON_W));
-            rect.setAttribute('height', String(MONK_ICON_H));
+            rect.setAttribute('width', String(BOXER_ICON_W));
+            rect.setAttribute('height', String(BOXER_ICON_H));
             rect.setAttribute('fill', color);
             rect.setAttribute('mask', `url(#${maskId})`);
             svg.appendChild(rect);
@@ -1139,8 +1139,8 @@
             placementSlots: { 1: [], 2: [] },
             placementRemaining: { 1: [], 2: [] },
             placementPlacedCount: { 1: 0, 2: 0 },
-            monkSlideMode: false,
-            monkSlideSource: null,
+            boxerSlideMode: false,
+            boxerSlideSource: null,
             params: {
                 actionsPerTurn: 2
             },
@@ -1220,8 +1220,8 @@
                 hp: 4,
                 ramDamage: 2
             };
-            // Monk: straight line
-            gameState.unitConfigs['MONK'] = {
+            // Boxer: straight line
+            gameState.unitConfigs['BOXER'] = {
                 range: 5,
                 template: MOVEMENT_TEMPLATES.STRAIGHT_LINE,
                 hp: 3,
@@ -1806,12 +1806,12 @@
                     iconGroup.appendChild(shine);
                     iconGroup.setAttribute('pointer-events', 'none');
                     g.appendChild(iconGroup);
-                } else if (piece.type === 'MONK') {
-                    const monkIcon = createMonkIconSvg(24, 'white');
-                    monkIcon.setAttribute('x', x - 12);
-                    monkIcon.setAttribute('y', y - 12);
-                    monkIcon.setAttribute('pointer-events', 'none');
-                    g.appendChild(monkIcon);
+                } else if (piece.type === 'BOXER') {
+                    const boxerIcon = createBoxerIconSvg(24, 'white');
+                    boxerIcon.setAttribute('x', x - 12);
+                    boxerIcon.setAttribute('y', y - 12);
+                    boxerIcon.setAttribute('pointer-events', 'none');
+                    g.appendChild(boxerIcon);
                 } else if (piece.type === 'GHOST') {
                     // Click target for ghosts (invisible)
                     const ghostHit = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -3776,7 +3776,7 @@
         function resetTurn() {
             if (gameState.phase === 'placement') {
                 const player = gameState.currentPlayer;
-                const replacableTypes = ['SNAKE', 'SHIELD', 'BOMBER', 'MONK'];
+                const replacableTypes = ['SNAKE', 'SHIELD', 'BOMBER', 'BOXER'];
 
                 // Remove current player's placed pieces from the board
                 gameState.pieces = gameState.pieces.filter(piece => {
@@ -3785,7 +3785,7 @@
 
                 // Reset placement state for current player only
                 gameState.placementSelectedType = null;
-                gameState.placementRemaining[player] = ['SNAKE', 'SHIELD', 'BOMBER', 'MONK'];
+                gameState.placementRemaining[player] = ['SNAKE', 'SHIELD', 'BOMBER', 'BOXER'];
                 gameState.placementPlacedCount[player] = 0;
 
                 updatePins();
@@ -3827,7 +3827,7 @@
             if (gameState.rotationMode) exitRotationMode();
             if (gameState.lanceTargetingMode) exitLanceTargetingMode();
             if (gameState.bombTargetingMode) exitBombTargetingMode();
-            if (gameState.monkSlideMode) exitMonkSlideMode();
+            if (gameState.boxerSlideMode) exitBoxerSlideMode();
 
             gameState.forceFields = []; // Reset force fields on turn reset (simple approach) or restore from snapshot if we added it?
             // Snapshot doesn't have forceFields yet. We should add it to snapshot.
@@ -3868,7 +3868,7 @@
             }
 
             const occupant = getPieceAt(q, r);
-            const replacableTypes = ['SNAKE', 'SHIELD', 'BOMBER', 'MONK'];
+            const replacableTypes = ['SNAKE', 'SHIELD', 'BOMBER', 'BOXER'];
 
             if (!selectedType) {
                 if (!occupant) {
@@ -3976,7 +3976,7 @@
             addLog(`Player 1's Turn (1 action)`, 'system');
         }
 
-        function activateMonkSlide(pieceIndex) {
+        function activateBoxerSlide(pieceIndex) {
             const piece = gameState.pieces[pieceIndex];
             if (piece.pinned) {
                 addLog('Pinned pieces cannot move or take actions!', 'system');
@@ -3986,8 +3986,8 @@
                 addLog('Alt action already used this turn.', 'system');
                 return;
             }
-            gameState.monkSlideMode = true;
-            gameState.monkSlideSource = pieceIndex;
+            gameState.boxerSlideMode = true;
+            gameState.boxerSlideSource = pieceIndex;
             gameState.selectedPiece = pieceIndex;
             addLog('Select an adjacent unit to slide.', 'system');
 
@@ -4003,27 +4003,27 @@
             }
         }
 
-        function exitMonkSlideMode() {
-            gameState.monkSlideMode = false;
-            gameState.monkSlideSource = null;
+        function exitBoxerSlideMode() {
+            gameState.boxerSlideMode = false;
+            gameState.boxerSlideSource = null;
             clearHighlights();
             renderPieces();
         }
 
-        function executeMonkSlide(monkIndex, targetIndex) {
-            const monk = gameState.pieces[monkIndex];
+        function executeBoxerSlide(boxerIndex, targetIndex) {
+            const boxer = gameState.pieces[boxerIndex];
             const target = gameState.pieces[targetIndex];
-            if (!monk || !target) return;
-            if (target.type !== 'GHOST' && target.player !== monk.player) {
-                addLog('Monk can only slide allies (or ghosts).', 'system');
-                exitMonkSlideMode();
+            if (!boxer || !target) return;
+            if (target.type !== 'GHOST' && target.player !== boxer.player) {
+                addLog('Boxer can only slide allies (or ghosts).', 'system');
+                exitBoxerSlideMode();
                 return;
             }
 
-            // Determine direction from monk to target
+            // Determine direction from boxer to target
             let direction = -1;
             for (let dir = 0; dir < 6; dir++) {
-                const n = hexNeighbor(monk.q, monk.r, dir);
+                const n = hexNeighbor(boxer.q, boxer.r, dir);
                 if (n.q === target.q && n.r === target.r) {
                     direction = dir;
                     break;
@@ -4031,11 +4031,11 @@
             }
             if (direction < 0) {
                 addLog('Slide target must be adjacent.', 'system');
-                exitMonkSlideMode();
+                exitBoxerSlideMode();
                 return;
             }
 
-            // Slide target in the same direction away from monk
+            // Slide target in the same direction away from boxer
             let current = { q: target.q, r: target.r };
             let next = hexNeighbor(current.q, current.r, direction);
             let moved = false;
@@ -4053,7 +4053,7 @@
 
             if (!moved) {
                 addLog('No space to slide.', 'system');
-                exitMonkSlideMode();
+                exitBoxerSlideMode();
                 return;
             }
 
@@ -4065,7 +4065,7 @@
                 unit.q = current.q;
                 unit.r = current.r;
             });
-            addLog(`${PIECE_TYPES[monk.type].name} slides ${stackedUnits.length > 1 ? 'stack' : PIECE_TYPES[target.type].name} to (${current.q}, ${current.r})`, monk.player);
+            addLog(`${PIECE_TYPES[boxer.type].name} slides ${stackedUnits.length > 1 ? 'stack' : PIECE_TYPES[target.type].name} to (${current.q}, ${current.r})`, boxer.player);
 
             // Keep ghost metadata in sync for all moved ghosts
             stackedUnits.forEach(unit => {
@@ -4099,8 +4099,8 @@
                 return;
             }
 
-            useAction(monkIndex, 'ALT');
-            exitMonkSlideMode();
+            useAction(boxerIndex, 'ALT');
+            exitBoxerSlideMode();
             updatePins();
             renderPieces();
             updateArmyDisplay();
@@ -4171,8 +4171,8 @@
                 return;
             }
 
-            // Monk Slide targeting mode (must select adjacent unit)
-            if (gameState.monkSlideMode) {
+            // Boxer Slide targeting mode (must select adjacent unit)
+            if (gameState.boxerSlideMode) {
                 addLog('Select an adjacent unit to slide.', 'system');
                 return;
             }
@@ -4245,17 +4245,17 @@
                 return;
             }
 
-            // Monk slide targeting mode
-            if (gameState.monkSlideMode && gameState.monkSlideSource !== null) {
-                const monkIndex = gameState.monkSlideSource;
-                if (resolvedIndex === monkIndex) return;
-                const monk = gameState.pieces[monkIndex];
-                if (hexDistance(monk.q, monk.r, piece.q, piece.r) !== 1) {
+            // Boxer slide targeting mode
+            if (gameState.boxerSlideMode && gameState.boxerSlideSource !== null) {
+                const boxerIndex = gameState.boxerSlideSource;
+                if (resolvedIndex === boxerIndex) return;
+                const boxer = gameState.pieces[boxerIndex];
+                if (hexDistance(boxer.q, boxer.r, piece.q, piece.r) !== 1) {
                     addLog('Slide target must be adjacent.', 'system');
-                    exitMonkSlideMode();
+                    exitBoxerSlideMode();
                     return;
                 }
-                executeMonkSlide(monkIndex, resolvedIndex);
+                executeBoxerSlide(boxerIndex, resolvedIndex);
                 return;
             }
 
@@ -4363,7 +4363,7 @@
                 } else if (piece.type === 'BOMBER') {
                     const hasBomb = gameState.bombs && gameState.bombs.some(b => b.owner === pieceIndex);
                     rotateBtn.innerHTML = hasBomb ? '⚡ Remove Bomb' : '⚡ Sticky Bomb';
-                } else if (piece.type === 'MONK') {
+                } else if (piece.type === 'BOXER') {
                     rotateBtn.innerHTML = '⚡ Slide';
                 } else if (piece.type === 'SNAKE') {
                     rotateBtn.innerHTML = '⚡ Summon Ghost';
@@ -4399,8 +4399,8 @@
             if (gameState.bombTargetingMode) {
                 gameState.bombTargetingMode = false;
             }
-            if (gameState.monkSlideMode) {
-                exitMonkSlideMode();
+            if (gameState.boxerSlideMode) {
+                exitBoxerSlideMode();
             }
 
             clearHighlights();
@@ -4877,7 +4877,7 @@
 
             const player = gameState.currentPlayer;
             const remaining = gameState.placementRemaining[player] || [];
-            const allTypes = ['SNAKE', 'SHIELD', 'BOMBER', 'MONK'];
+            const allTypes = ['SNAKE', 'SHIELD', 'BOMBER', 'BOXER'];
 
             allTypes.forEach(type => {
                 const div = document.createElement('div');
@@ -4910,9 +4910,9 @@
                     div.style.display = 'flex';
                     div.style.alignItems = 'center';
                     div.style.justifyContent = 'center';
-                } else if (type === 'MONK') {
+                } else if (type === 'BOXER') {
                     div.innerHTML = '';
-                    div.appendChild(createMonkIconSvg(26, 'white'));
+                    div.appendChild(createBoxerIconSvg(26, 'white'));
                     div.style.display = 'flex';
                     div.style.alignItems = 'center';
                     div.style.justifyContent = 'center';
@@ -5031,11 +5031,11 @@
                         div.style.display = 'flex';
                         div.style.alignItems = 'center';
                         div.style.justifyContent = 'center';
-                    } else if (piece.type === 'MONK') {
+                    } else if (piece.type === 'BOXER') {
                         const svgSize = 24;
                         const strokeColor = piece.pinned ? '#5a5a5a' : 'white';
                         div.innerHTML = '';
-                        div.appendChild(createMonkIconSvg(svgSize, strokeColor));
+                        div.appendChild(createBoxerIconSvg(svgSize, strokeColor));
                         div.style.display = 'flex';
                         div.style.alignItems = 'center';
                         div.style.justifyContent = 'center';
@@ -5110,9 +5110,9 @@
                     btn.style.display = 'flex';
                     btn.style.alignItems = 'center';
                     btn.style.justifyContent = 'center';
-                } else if (type === 'MONK') {
+                } else if (type === 'BOXER') {
                     btn.innerHTML = '';
-                    btn.appendChild(createMonkIconSvg(24, 'currentColor'));
+                    btn.appendChild(createBoxerIconSvg(24, 'currentColor'));
                     btn.style.display = 'flex';
                     btn.style.alignItems = 'center';
                     btn.style.justifyContent = 'center';
@@ -5285,7 +5285,7 @@
             gameState.turnHistory = new Map(); // pieceIndex -> Set<ActionType>
             gameState.placementSelectedType = null;
             gameState.placementSlots = { 1: [], 2: [] };
-            gameState.placementRemaining = { 1: ['SNAKE', 'SHIELD', 'BOMBER', 'MONK'], 2: ['SNAKE', 'SHIELD', 'BOMBER', 'MONK'] };
+            gameState.placementRemaining = { 1: ['SNAKE', 'SHIELD', 'BOMBER', 'BOXER'], 2: ['SNAKE', 'SHIELD', 'BOMBER', 'BOXER'] };
             gameState.placementPlacedCount = { 1: 0, 2: 0 };
 
             // Setup Timer
@@ -5382,8 +5382,8 @@
                         cancelPathBuilding();
                     } else if (gameState.bombTargetingMode) {
                         exitBombTargetingMode();
-                    } else if (gameState.monkSlideMode) {
-                        exitMonkSlideMode();
+                    } else if (gameState.boxerSlideMode) {
+                        exitBoxerSlideMode();
                     } else {
                         gameState.selectedPiece = null;
                         gameState.validMoves = [];
@@ -5547,11 +5547,11 @@
                         }
                     } else if (piece.type === 'SHIELD') {
                         activateForceField(gameState.selectedPiece);
-                    } else if (piece.type === 'MONK') {
-                        if (gameState.monkSlideMode) {
-                            exitMonkSlideMode();
+                    } else if (piece.type === 'BOXER') {
+                        if (gameState.boxerSlideMode) {
+                            exitBoxerSlideMode();
                         } else {
-                            activateMonkSlide(gameState.selectedPiece);
+                            activateBoxerSlide(gameState.selectedPiece);
                         }
                     } else if (piece.type !== 'PAWN') {
                         // Execute Alt Move for other power pieces
