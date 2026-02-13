@@ -4016,11 +4016,6 @@
             const boxer = gameState.pieces[boxerIndex];
             const target = gameState.pieces[targetIndex];
             if (!boxer || !target) return;
-            if (target.type !== 'GHOST' && target.player !== boxer.player) {
-                addLog('Boxer can only slide allies (or ghosts).', 'system');
-                exitBoxerSlideMode();
-                return;
-            }
 
             // Determine direction from boxer to target
             let direction = -1;
