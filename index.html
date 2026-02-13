@@ -1813,6 +1813,15 @@
                     monkIcon.setAttribute('pointer-events', 'none');
                     g.appendChild(monkIcon);
                 } else if (piece.type === 'GHOST') {
+                    // Click target for ghosts (invisible)
+                    const ghostHit = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    ghostHit.setAttribute('cx', x);
+                    ghostHit.setAttribute('cy', y);
+                    ghostHit.setAttribute('r', HEX_SIZE * 0.6);
+                    ghostHit.setAttribute('fill', 'transparent');
+                    ghostHit.setAttribute('pointer-events', 'all');
+                    g.appendChild(ghostHit);
+
                     // Ghost piece - use spectral ghost icon
                     const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                     // Scale increased to 2.2 (2x original 1.1)
@@ -4017,8 +4026,8 @@
             const monk = gameState.pieces[monkIndex];
             const target = gameState.pieces[targetIndex];
             if (!monk || !target) return;
-            if (target.player !== monk.player) {
-                addLog('Monk can only slide allies.', 'system');
+            if (target.type !== 'GHOST' && target.player !== monk.player) {
+                addLog('Monk can only slide allies (or ghosts).', 'system');
                 exitMonkSlideMode();
                 return;
             }
@@ -4060,29 +4069,45 @@
                 return;
             }
 
-            target.q = current.q;
-            target.r = current.r;
-            addLog(`${PIECE_TYPES[monk.type].name} slides ${PIECE_TYPES[target.type].name} to (${current.q}, ${current.r})`, monk.player);
+            // Move all alive pieces sharing the target cell together
+            const oldStackQ = target.q;
+            const oldStackR = target.r;
+            const stackedUnits = gameState.pieces.filter(p => p.alive && p.q === oldStackQ && p.r === oldStackR);
+            stackedUnits.forEach(unit => {
+                unit.q = current.q;
+                unit.r = current.r;
+            });
+            addLog(`${PIECE_TYPES[monk.type].name} slides ${stackedUnits.length > 1 ? 'stack' : PIECE_TYPES[target.type].name} to (${current.q}, ${current.r})`, monk.player);
 
-            if (target.type === 'GHOST') {
-                const ghostEntry = gameState.ghosts.find(g => g.owner === target.summonerIndex);
-                if (ghostEntry) {
-                    ghostEntry.q = target.q;
-                    ghostEntry.r = target.r;
+            // Keep ghost metadata in sync for all moved ghosts
+            stackedUnits.forEach(unit => {
+                if (unit.type === 'GHOST') {
+                    const matchingEntries = gameState.ghosts.filter(g =>
+                        g.owner === unit.summonerIndex && g.q === oldStackQ && g.r === oldStackR
+                    );
+                    matchingEntries.forEach(entry => {
+                        entry.q = unit.q;
+                        entry.r = unit.r;
+                    });
                 }
-            }
+            });
 
-            // Check for Archer Ascension (reaching outer ring)
-            if (target.type === 'ARCHER' && !target.altMoveUnlocked) {
-                if (getRing(target.q, target.r) === BOARD_RADIUS) {
-                    target.altMoveUnlocked = true;
-                    addLog('ARCHER reached the edge! Shoot Arrow Unlocked.', 'system');
+            // Post-move effects for all moved units
+            stackedUnits.forEach(unit => {
+                if (unit.type === 'ARCHER' && !unit.altMoveUnlocked) {
+                    if (getRing(unit.q, unit.r) === BOARD_RADIUS) {
+                        unit.altMoveUnlocked = true;
+                        addLog('ARCHER reached the edge! Shoot Arrow Unlocked.', 'system');
+                    }
                 }
-            }
+            });
 
-            // Check victory (King reaching throne)
-            if (target.q === 0 && target.r === 0 && PIECE_TYPES[target.type].isKing) {
-                endGame(target.player, 'throne');
+            // Check victory (any moved King reaching throne)
+            const kingOnThrone = stackedUnits.find(unit =>
+                PIECE_TYPES[unit.type].isKing && unit.q === 0 && unit.r === 0
+            );
+            if (kingOnThrone) {
+                endGame(kingOnThrone.player, 'throne');
                 return;
             }
 
