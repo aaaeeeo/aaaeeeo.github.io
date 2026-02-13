@@ -2919,19 +2919,7 @@
                 );
             }
 
-            // If a Snake dies, remove all its summoned ghosts
-            if (piece.type === 'SNAKE') {
-                const ownedGhosts = gameState.pieces.filter(p =>
-                    p.alive && p.type === 'GHOST' && p.summonerIndex === pieceIndex
-                );
-                if (ownedGhosts.length > 0) {
-                    ownedGhosts.forEach(g => {
-                        g.alive = false;
-                    });
-                    gameState.ghosts = gameState.ghosts.filter(g => g.owner !== pieceIndex);
-                    addLog(`${piece.player === 1 ? 'P1' : 'P2'} Soul Echoes fade away...`, piece.player);
-                }
-            }
+            // Snake death no longer removes its summoned ghosts.
         }
 
         function applyDamage(piece, damage, attackerIndex = null) {
