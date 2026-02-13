@@ -2165,7 +2165,8 @@
                         if (hexDistance(piece.q, piece.r, q, r) > maxRange) continue;
 
                         const occupant = getPieceAt(q, r);
-                        if (occupant && occupant.player === piece.player) continue;
+                        const isFriendlyGhost = occupant && occupant.type === 'GHOST' && occupant.player === piece.player;
+                        if (occupant && occupant.player === piece.player && !isFriendlyGhost) continue;
 
                         const hasEnemy = !!occupant && occupant.player !== piece.player;
                         const move = {
@@ -2275,8 +2276,9 @@
                         path: newPath
                     };
 
-                    // If there's a friendly, we can pass through but can't end here
-                    if (occupant && occupant.player === piece.player) {
+                    const isFriendlyGhost = occupant && occupant.type === 'GHOST' && occupant.player === piece.player;
+                    // If there's a friendly non-ghost, we can pass through but can't end here
+                    if (occupant && occupant.player === piece.player && !isFriendlyGhost) {
                         // Can pass through - continue exploring
                         addVisited(nextKey, newDistance, newDamageCount);
                         queue.push(newState);
@@ -2404,7 +2406,8 @@
                         if (hexDistance(piece.q, piece.r, q, r) > maxRange) continue;
 
                         const occupant = getPieceAt(q, r);
-                        if (occupant && occupant.player === piece.player) continue;
+                        const isFriendlyGhost = occupant && occupant.type === 'GHOST' && occupant.player === piece.player;
+                        if (occupant && occupant.player === piece.player && !isFriendlyGhost) continue;
 
                         const hasEnemy = !!occupant && occupant.player !== piece.player;
                         if (hasEnemy) {
@@ -2501,14 +2504,13 @@
                 const occupant = getPieceAt(next.q, next.r);
                 const ghostAtPosition = getGhostPieceAt(next.q, next.r);
 
-                // Ghost handling: Summoner can pass through/land on their own ghost freely
-                if (ghostAtPosition && ghostAtPosition.summonerIndex === gameState.selectedPiece) {
-                    // Summoner found their own ghost - check if there's another occupant besides the ghost
+                // Ghost handling
+                if (ghostAtPosition) {
+                    // If ghost overlaps with a real piece, use the real piece for occupancy rules.
                     const otherOccupant = gameState.pieces.find(p =>
                         p.alive && p.q === next.q && p.r === next.r && p.type !== 'GHOST'
                     );
                     if (otherOccupant) {
-                        // Ghost overlaps with another piece - use that piece as occupant
                         validNext.push({
                             q: next.q,
                             r: next.r,
@@ -2516,8 +2518,11 @@
                             hasFriendly: otherOccupant.player === piece.player,
                             occupant: otherOccupant
                         });
-                    } else {
-                        // Only ghost at this position - treat as empty space for summoner
+                        return;
+                    }
+
+                    // Standalone friendly ghost is landable (treat as empty).
+                    if (ghostAtPosition.player === piece.player) {
                         validNext.push({
                             q: next.q,
                             r: next.r,
@@ -2525,18 +2530,15 @@
                             hasFriendly: false,
                             occupant: null
                         });
+                        return;
                     }
-                    return;
-                }
 
-                // For non-summoners: treat ghost as an enemy piece
-                if (ghostAtPosition) {
-                    // There's an enemy ghost here - treat it as an enemy
+                    // Enemy ghost behaves like an enemy occupant.
                     validNext.push({
                         q: next.q,
                         r: next.r,
-                        hasEnemy: ghostAtPosition.player !== piece.player,
-                        hasFriendly: ghostAtPosition.player === piece.player,
+                        hasEnemy: true,
+                        hasFriendly: false,
                         occupant: ghostAtPosition
                     });
                     return;
@@ -4455,13 +4457,11 @@
             gameState.previewPinningPaths = [];
             if (gameState.currentPath.length > 0) {
                 const destination = gameState.currentPath[gameState.currentPath.length - 1];
-                // Only calculate preview if destination is valid (not a friendly unit, unless it's own ghost)
+                // Only calculate preview if destination is valid
                 const occupant = getPieceAt(destination.q, destination.r);
-                const ghostAtDest = getGhostPieceAt(destination.q, destination.r);
-                const isSummonerOnOwnGhost = ghostAtDest &&
-                    ghostAtDest.summonerIndex === gameState.pathStartPiece;
+                const isFriendlyGhost = occupant && occupant.type === 'GHOST' && occupant.player === piece.player;
 
-                if (!occupant || occupant.player !== piece.player || isSummonerOnOwnGhost) {
+                if (!occupant || occupant.player !== piece.player || isFriendlyGhost) {
                     try {
                         const previewPaths = calculatePreviewPinning(
                             gameState.pathStartPiece,
@@ -4501,15 +4501,10 @@
 
             // Check if destination is valid
             const occupant = getPieceAt(destination.q, destination.r);
-            const ghostAtDest = getGhostPieceAt(destination.q, destination.r);
+            const isFriendlyGhost = occupant && occupant.type === 'GHOST' && occupant.player === piece.player;
 
-            // Check if this is the summoner landing on their own ghost
-            const isSummonerLandingOnOwnGhost = ghostAtDest &&
-                ghostAtDest.summonerIndex === gameState.pathStartPiece &&
-                (!occupant || occupant === ghostAtDest);
-
-            // Cannot land on friendly (unless it's the summoner landing on their own ghost)
-            if (occupant && occupant.player === piece.player && !isSummonerLandingOnOwnGhost) {
+            // Cannot land on friendly non-ghost
+            if (occupant && occupant.player === piece.player && !isFriendlyGhost) {
                 addLog('Cannot land on friendly unit!', 'system');
                 return;
             }
