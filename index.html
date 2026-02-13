@@ -4225,7 +4225,23 @@
         }
 
         function onPieceClick(index) {
-            const piece = gameState.pieces[index];
+            let resolvedIndex = index;
+            let piece = gameState.pieces[resolvedIndex];
+
+            // Prefer selecting non-ghost piece when stacked with a ghost.
+            if (piece && piece.alive && piece.type === 'GHOST') {
+                const stackedRealIndex = gameState.pieces.findIndex((p, i) =>
+                    i !== resolvedIndex &&
+                    p.alive &&
+                    p.type !== 'GHOST' &&
+                    p.q === piece.q &&
+                    p.r === piece.r
+                );
+                if (stackedRealIndex >= 0) {
+                    resolvedIndex = stackedRealIndex;
+                    piece = gameState.pieces[resolvedIndex];
+                }
+            }
 
             if (gameState.phase !== 'playing') return;
 
@@ -4244,20 +4260,20 @@
             // Monk slide targeting mode
             if (gameState.monkSlideMode && gameState.monkSlideSource !== null) {
                 const monkIndex = gameState.monkSlideSource;
-                if (index === monkIndex) return;
+                if (resolvedIndex === monkIndex) return;
                 const monk = gameState.pieces[monkIndex];
                 if (hexDistance(monk.q, monk.r, piece.q, piece.r) !== 1) {
                     addLog('Slide target must be adjacent.', 'system');
                     exitMonkSlideMode();
                     return;
                 }
-                executeMonkSlide(monkIndex, index);
+                executeMonkSlide(monkIndex, resolvedIndex);
                 return;
             }
 
             // If selecting a different piece, check for bomb targeting
-            if (gameState.bombTargetingMode && gameState.selectedPiece !== index) {
-                const targetPiece = gameState.pieces[index];
+            if (gameState.bombTargetingMode && gameState.selectedPiece !== resolvedIndex) {
+                const targetPiece = gameState.pieces[resolvedIndex];
                 const sourcePiece = gameState.pieces[gameState.selectedPiece];
 
                 // Check if it's a neighbor
@@ -4271,7 +4287,7 @@
                             id: Date.now(),
                             owner: gameState.selectedPiece,
                             type: 'unit',
-                            targetUnitIndex: index
+                            targetUnitIndex: resolvedIndex
                         });
                         addLog('Bomb stuck to enemy!', gameState.currentPlayer);
                         useAction(gameState.selectedPiece, 'ALT');
@@ -4308,13 +4324,13 @@
             selectUnitForEdit(piece.type);
 
             // Select own piece - start path building
-            if (piece.player === gameState.currentPlayer && !isPieceFullyUsed(index)) {
+            if (piece.player === gameState.currentPlayer && !isPieceFullyUsed(resolvedIndex)) {
                 // Pinned pieces cannot be selected
                 if (piece.pinned) {
                     addLog('Pinned pieces cannot move or take actions!', 'system');
                     return;
                 }
-                startPathBuilding(index);
+                startPathBuilding(resolvedIndex);
             }
         }
 
