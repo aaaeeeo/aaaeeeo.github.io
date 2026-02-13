@@ -4720,7 +4720,7 @@
                 gameState.bombs.splice(idx, 1);
             }
 
-            // Find all pieces in radius 1
+            // Find all enemy pieces in radius 1
             const piecesToDamage = [];
             gameState.pieces.forEach((p, i) => {
                 if (p.alive && hexDistance(p.q, p.r, q, r) <= 1) {
@@ -4731,9 +4731,10 @@
                 }
             });
 
-            // Apply damage
+            // Apply damage: center cell = 3, surrounding cells = 2
             piecesToDamage.forEach(p => {
-                applyDamage(p, 2, bomb.owner);
+                const dmg = (p.q === q && p.r === r) ? 3 : 2;
+                applyDamage(p, dmg, bomb.owner);
             });
 
             renderPieces();
